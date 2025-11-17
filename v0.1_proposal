@@ -1,0 +1,190 @@
+
+## 🎯 Hackathon MCP: What to build
+
+step 1: build a simplified MCP server proxy taking inspiration from Nexus
+
+### What We MUST Build 
+
+**Absolute Minimum:**
+1. **MCP Proxy Server** - Aggregates tools from end servers
+2. **API Endpoints** (2 routes):
+   - GET `/api/servers` - Returns available servers (from DB)
+   - GET `/api/user/servers` - Returns user's installed servers + configs
+3. **Database** - Store server configs and auth tokens (2 tables)
+4. **Minimal UI** - Single page with:
+   - Server marketplace (list from API)
+   - Install button per server
+   - Env var input form (for STDIO servers)
+   - OAuth button (for HTTP servers)
+   - Status display (connected/disconnected)
+5. **OAuth Exchange** - Basic OAuth redirect flow
+
+**What We DON'T have to Build:**
+- ❌ Full dashboard with routing/navigation
+- ❌ Server search/filtering (simple list only)
+- ❌ User management (single hardcoded user)
+- ❌ Webhooks (MCP server polls API)
+- ❌ Token refresh (manual only)
+- ❌ Error handling UI (console logs only)
+- ❌ Multiple pages/routes (single page app)
+- ❌ Server discovery (hardcode servers in DB)
+
+### MVP Implementation
+
+**Database (2 tables only):**
+```sql
+CREATE TABLE mcp_servers (
+  id UUID PRIMARY KEY,
+  name TEXT,
+  config JSONB  -- {transport, command/url, accessToken}
+);
+
+CREATE TABLE user_servers (
+  user_id TEXT PRIMARY KEY,  -- Hardcode: 'default'
+  server_ids UUID[]  -- Array of installed server IDs
+);
+```
+
+**API (2 endpoints):**
+```typescript
+// Marketplace: Available servers
+GET /api/servers
+// Returns: [{id, name, description, transport}]
+
+// User's installed servers with configs
+GET /api/user/servers?user_id=default
+// Returns: [{id, config, accessToken, envVars}]
+```
+
+**MCP Server:**
+- Poll API every 30s
+- Connect to returned servers
+- Aggregate tools (simple namespace: `server0_tool`, `server1_tool`)
+- Route tool calls
+
+**OAuth (Manual Script):**
+```bash
+# One-time: Get token manually
+curl -X POST https://provider.com/oauth/token ...
+# Store in database manually
+```
+
+**MVP Stack:**
+- Express API (2 routes)
+- PostgreSQL (2 tables)
+- MCP SDK (proxy server)
+- Single HTML page with:
+  - Server marketplace (fetches from API)
+  - Install button → calls API
+  - Env var form → saves to DB
+  - OAuth button → redirects to provider
+- Basic OAuth redirect callback
+
+
+## Data Flow
+
+### User Installs Server
+
+```
+1. User clicks "Install" in dashboard
+   ↓
+2. POST /api/user/mcp/servers/[id]
+   ↓
+3. Insert into mcp_server_users table
+   ↓
+4. Check if auth required
+   ↓
+5. If OAuth: Show "Authenticate" button
+   If Env Vars: Show env var form
+   ↓
+6. User completes auth
+   ↓
+7. POST /api/external/server (webhook)
+   ↓
+8. MCP server receives notification
+   ↓
+9. MCP server fetches updated server list
+   ↓
+10. MCP server connects to end server
+   ↓
+11. Tools become available
+```
+
+### Tool Call Flow
+
+```
+1. Client calls tool: github_0_search_repos
+   ↓
+2. Nexus MCP receives call
+   ↓
+3. Parses namespace: github_0 → server ID mapping
+   ↓
+4. Routes to GitHub EndServer instance
+   ↓
+5. EndServer calls GitHub MCP server
+   ↓
+6. GitHub returns result
+   ↓
+7. EndServer returns to Nexus
+   ↓
+8. Proxy returns to client 
+```
+
+---
+
+## Authentication Architecture
+
+### OAuth Flow (Streamable HTTP)
+
+```
+┌─────────┐    ┌──────────┐    ┌──────────┐    ┌─────────┐
+│  User   │    │ Dashboard│    │ Provider │    │   MCP   │
+│ Browser │    │  Server  │    │ (Notion) │    │ Server  │
+└────┬────┘    └────┬─────┘    └────┬─────┘    └────┬────┘
+     │              │                │                │
+     │ 1. Click Auth│                │                │
+     ├─────────────>│                │                │
+     │              │ 2. Get Auth URL│                │
+     │              ├───────────────>│                │
+     │              │ 3. Auth URL    │                │
+     │              │<───────────────┤                │
+     │ 4. Redirect  │                │                │
+     │<─────────────┤                │                │
+     │ 5. Authorize │                │                │
+     │──────────────┼───────────────>│                │
+     │ 6. Redirect  │                │                │
+     │<─────────────┼────────────────┤                │
+     │ 7. Callback  │                │                │
+     ├─────────────>│                │                │
+     │              │ 8. Exchange   │                │
+     │              ├───────────────>│                │
+     │              │ 9. Tokens      │                │
+     │              │<───────────────┤                │
+     │              │ 10. Store     │                │
+     │              │     tokens     │                │
+     │              │                │                │
+     │              │ 11. Notify MCP │                │
+     │              ├─────────────────────────────────>│
+     │              │                │                │
+     │              │                │ 12. Fetch      │
+     │              │                │     servers    │
+     │              │<─────────────────────────────────┤
+     │              │                │                │
+     │              │                │ 13. Connect   │
+     │              │                │     to server  │
+     │              │                │                │
+```
+
+### Environment Variables (STDIO)
+
+```
+1. User enters env vars in dashboard
+2. Values stored in mcp_server_environment_vars_users
+3. MCP server fetches servers via API
+4. MCP server gets env vars for each server
+5. When starting subprocess, injects env vars:
+   process.env.GITHUB_TOKEN = userValue
+6. Subprocess has access to env vars
+```
+
+---
