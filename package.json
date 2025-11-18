@@ -13,9 +13,12 @@
     "stop": "pm2 stop ecosystem.config.js",
     "restart": "pm2 restart ecosystem.config.js",
     "status": "pm2 status",
-    "logs": "pm2 logs",
-    "logs:dashboard": "pm2 logs nexus-dashboard",
-    "logs:mcp": "pm2 logs nexus-mcp"
+    "logs": "pm2 logs --lines 50 --nostream",
+    "logs:dashboard": "pm2 logs nexus-dashboard --lines 50 --nostream",
+    "logs:mcp": "pm2 logs nexus-mcp --lines 50 --nostream",
+    "logs:tail": "pm2 logs",
+    "logs:tail:dashboard": "pm2 logs nexus-dashboard",
+    "logs:tail:mcp": "pm2 logs nexus-mcp"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
