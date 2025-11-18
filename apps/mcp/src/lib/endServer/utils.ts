@@ -8,10 +8,12 @@ import {
 import { AuthenticatedStreamableHTTPClientTransport } from "./transport.js";
 
 /**
- * Verifies that all required environment variables are present.
+ * Verifies that all required environment variables are present and non-empty.
  */
 export function verifyEnvironmentVariables(environmentVariables: EndServerEnvVariable[]): boolean {
-  return environmentVariables.every((envVar) => !envVar.required || envVar.value !== undefined);
+  return environmentVariables.every(
+    (envVar) => !envVar.required || (envVar.value !== undefined && envVar.value !== null && envVar.value.trim() !== "")
+  );
 }
 
 /**

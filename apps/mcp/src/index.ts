@@ -18,8 +18,8 @@ const app = express();
 app.use(
   cors({
     origin: "*",
-    exposedHeaders: ["Mcp-Session-Id"],
-    allowedHeaders: ["Content-Type", "mcp-session-id", "authorization"]
+    exposedHeaders: ["Mcp-Session-Id", "mcp-session-id", "*"],
+    allowedHeaders: ["Content-Type", "mcp-session-id", "Mcp-Session-Id", "authorization"]
   })
 );
 
@@ -47,16 +47,27 @@ async function handleMCPRequest(req: Request, res: Response) {
     }
 
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
+    const method = (req.body as any)?.method;
+    console.log(
+      `\x1B[90m[Request] Method: ${method || "unknown"}, Session: ${sessionId || "none"}, Headers: ${JSON.stringify(Object.keys(req.headers))}\x1B[0m`
+    );
+    
     let transport: StreamableHTTPServerTransport;
 
     if (sessionId && transports[sessionId]) {
       transport = transports[sessionId];
+      console.log(`\x1B[90m[Request] Using existing session: ${sessionId}\x1B[0m`);
     } else if (!sessionId && isInitializeRequest(req.body)) {
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (newSessionId) => {
           transports[newSessionId] = transport;
           console.log(`\x1B[94m[Client] New session initialized: ${newSessionId}\x1B[0m`);
+          // Explicitly set both header casing variants for Cursor compatibility
+          res.setHeader("Mcp-Session-Id", newSessionId);
+          res.setHeader("mcp-session-id", newSessionId);
+          res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id, mcp-session-id, *");
+          console.log(`\x1B[90m[Session] Set headers: Mcp-Session-Id=${newSessionId}\x1B[0m`);
         }
       });
 
@@ -68,6 +79,25 @@ async function handleMCPRequest(req: Request, res: Response) {
       };
 
       await proxyMCPServer.connect(transport);
+      
+      // Set headers immediately after transport creation, before handleRequest
+      // The SDK will set mcp-session-id, we ensure Mcp-Session-Id is also set
+      const originalWriteHead = res.writeHead.bind(res);
+      res.writeHead = function(statusCode?: any, statusMessage?: any, headers?: any) {
+        if (transport.sessionId) {
+          const finalHeaders = typeof statusCode === 'number' 
+            ? (headers || statusMessage || {})
+            : (statusCode || {});
+          finalHeaders['Mcp-Session-Id'] = transport.sessionId;
+          finalHeaders['mcp-session-id'] = transport.sessionId;
+          if (typeof statusCode === 'number') {
+            return originalWriteHead(statusCode, statusMessage, finalHeaders);
+          } else {
+            return originalWriteHead(finalHeaders);
+          }
+        }
+        return originalWriteHead(statusCode, statusMessage, headers);
+      };
     } else {
       res.status(400).json({
         jsonrpc: "2.0",
@@ -79,6 +109,28 @@ async function handleMCPRequest(req: Request, res: Response) {
       });
       return;
     }
+
+    // Intercept response to ensure session headers are set on every response
+    const originalEnd = res.end.bind(res);
+    const originalWrite = res.write.bind(res);
+    
+    res.write = function(chunk?: any, encoding?: any, cb?: any) {
+      if (transport.sessionId && !res.headersSent) {
+        res.setHeader("Mcp-Session-Id", transport.sessionId);
+        res.setHeader("mcp-session-id", transport.sessionId);
+        res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id, mcp-session-id, *");
+      }
+      return originalWrite(chunk, encoding, cb);
+    };
+    
+    res.end = function(chunk?: any, encoding?: any, cb?: any) {
+      if (transport.sessionId && !res.headersSent) {
+        res.setHeader("Mcp-Session-Id", transport.sessionId);
+        res.setHeader("mcp-session-id", transport.sessionId);
+        res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id, mcp-session-id, *");
+      }
+      return originalEnd(chunk, encoding, cb);
+    };
 
     await transport.handleRequest(req, res, req.body);
   } catch (error) {

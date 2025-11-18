@@ -43,8 +43,11 @@ let pollingInterval: NodeJS.Timeout | null = null;
 
 function registerEndServer(endServerData: EndServerData): boolean {
   if (!hasValidEnv(endServerData)) {
+    const missingVars = endServerData.environmentVariables
+      .filter((envVar) => envVar.required && (!envVar.value || envVar.value.trim() === ""))
+      .map((envVar) => envVar.key);
     console.log(
-      `\x1B[90mEnd server '${endServerData.name}' has missing environment variables, skipping.\x1B[0m`
+      `\x1B[93mEnd server '${endServerData.name}' has missing required environment variables: ${missingVars.join(", ")}. Skipping.\x1B[0m`
     );
     return false;
   }
@@ -181,12 +184,31 @@ const customTools: Array<{
 
 proxyMCPServer.setRequestHandler(ListToolsRequestSchema, async () => {
   console.log("\x1B[94m[Client] Requested tools list...\x1B[0m");
+  console.log(`\x1B[90m[Tools] End servers available: ${Object.keys(endServers).length}\x1B[0m`);
+  
+  // Debug: Log all registered end servers and their transport status
+  if (Object.keys(endServers).length > 0) {
+    console.log(`\x1B[90m[Tools] Registered end servers: ${Object.keys(endServers).map(id => {
+      const server = endServers[id];
+      return `${server.name} (id: ${id}, transport: ${server.isTransportCreated ? 'created' : 'not created'})`;
+    }).join(', ')}\x1B[0m`);
+  }
 
   const toolsPerServer: Record<string, Tool[]> = {};
 
   for (const endServerId of Object.keys(endServers)) {
-    if (!endServers[endServerId].isTransportCreated) continue;
-    toolsPerServer[endServerId] = await endServers[endServerId].listTools();
+    if (!endServers[endServerId].isTransportCreated) {
+      console.log(`\x1B[90m[Tools] Skipping ${endServers[endServerId].name} - transport not created\x1B[0m`);
+      continue;
+    }
+    try {
+      console.log(`\x1B[90m[Tools] Fetching tools from ${endServers[endServerId].name}...\x1B[0m`);
+      toolsPerServer[endServerId] = await endServers[endServerId].listTools();
+      console.log(`\x1B[90m[Tools] ${endServers[endServerId].name} returned ${toolsPerServer[endServerId].length} tools\x1B[0m`);
+    } catch (error) {
+      console.error(`\x1B[91m[Tools] Error fetching tools from ${endServers[endServerId].name}: ${error instanceof Error ? error.message : String(error)}\x1B[0m`);
+      toolsPerServer[endServerId] = [];
+    }
   }
 
   const namespacedTools = Object.entries(toolsPerServer).flatMap(([endServerId, tools]) =>
@@ -199,7 +221,9 @@ proxyMCPServer.setRequestHandler(ListToolsRequestSchema, async () => {
     }))
   );
 
-  return { tools: [...customTools, ...namespacedTools] };
+  const allTools = [...customTools, ...namespacedTools];
+  console.log(`\x1B[90m[Tools] Returning ${allTools.length} tools (${customTools.length} custom + ${namespacedTools.length} from end servers)\x1B[0m`);
+  return { tools: allTools };
 });
 
 proxyMCPServer.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -319,24 +343,34 @@ export async function initializeServer() {
 
   for (const endServer of userEndServers) {
     try {
+      console.log(`\x1B[90mRegistering end server: ${endServer.name} (id: ${endServer.id})\x1B[0m`);
       if (!registerEndServer(endServer)) {
         console.log(`\x1B[90mSkipping server '${endServer.name}' due to validation issues.\x1B[0m`);
         continue;
       }
+      console.log(`\x1B[90mRegistered ${endServer.name}, creating transport...\x1B[0m`);
 
       await endServers[endServer.id].createTransport();
+      console.log(`\x1B[90mTransport created for ${endServer.name}\x1B[0m`);
+      
       await endServers[endServer.id].startTransport();
+      console.log(`\x1B[90mTransport started for ${endServer.name}\x1B[0m`);
+      
       await endServers[endServer.id].initializeConnection();
+      console.log(`\x1B[90mConnection initialized for ${endServer.name}\x1B[0m`);
     } catch (error) {
       console.error(
-        `\x1B[90mFailed to setup end server '${endServer.name}', skipping. Error: ${
+        `\x1B[91mFailed to setup end server '${endServer.name}', skipping. Error: ${
           error instanceof Error ? error.message : String(error)
         }\x1B[0m`
       );
+      if (error instanceof Error && error.stack) {
+        console.error(`\x1B[91mStack trace: ${error.stack}\x1B[0m`);
+      }
     }
   }
 
-  console.log("\x1B[90mEnd servers installed, server is ready.\x1B[0m");
+  console.log(`\x1B[90mEnd servers installed: ${Object.keys(endServers).length} registered, server is ready.\x1B[0m`);
 
   // Start polling for config changes every 30 seconds
   startPolling();
