@@ -1,30 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { randomBytes } from "crypto";
 
 async function getUserId(req: NextRequest): Promise<string | null> {
-  const cookieStore = cookies();
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+  try {
+    const cookieStore = cookies();
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        }
       }
+    });
+
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (session?.user) {
+      return session.user.id;
     }
-  });
 
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error
+    } = await supabase.auth.getUser();
 
-  if (error || !user) return null;
-  return user.id;
+    if (error || !user) return null;
+    return user.id;
+  } catch (error) {
+    console.error("Error in getUserId:", error);
+    return null;
+  }
 }
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {

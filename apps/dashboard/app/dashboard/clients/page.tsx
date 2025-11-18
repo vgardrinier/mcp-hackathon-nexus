@@ -9,27 +9,24 @@ interface Client {
   id: string;
   name: string;
   description: string;
-  status: "connected" | "disconnected";
+  icon: string;
+  href: string;
 }
 
 const clients: Client[] = [
   {
-    id: "chatgpt",
-    name: "ChatGPT",
-    description: "OpenAI's GPT models",
-    status: "disconnected"
+    id: "cursor",
+    name: "Cursor",
+    description: "AI-powered code editor with MCP support. Connect via HTTP or STDIO.",
+    icon: "⚡",
+    href: "/dashboard/clients/cursor"
   },
   {
     id: "claude",
-    name: "Claude",
-    description: "Anthropic's Claude models",
-    status: "disconnected"
-  },
-  {
-    id: "gemini",
-    name: "Gemini",
-    description: "Google's Gemini models",
-    status: "disconnected"
+    name: "Claude Desktop",
+    description: "Anthropic's Claude Desktop app with MCP support. Connect via STDIO.",
+    icon: "🤖",
+    href: "/dashboard/clients/claude"
   }
 ];
 
@@ -44,11 +41,6 @@ export default function ClientsPage() {
     }
   }, [user, authLoading, router]);
 
-  const handleConnect = (clientId: string) => {
-    // Navigate to connect page with client-specific instructions
-    router.push(`/dashboard/connect?client=${clientId}`);
-  };
-
   if (authLoading) {
     return (
       <div style={{ padding: "2rem" }}>
@@ -61,7 +53,7 @@ export default function ClientsPage() {
     <div style={{ maxWidth: "1200px", margin: "2rem auto", padding: "2rem" }}>
       <div style={{ marginBottom: "2rem" }}>
         <h1 style={{ fontSize: "2rem", fontWeight: 600, marginBottom: "0.5rem" }}>MCP Clients</h1>
-        <p style={{ color: "#666", fontSize: "0.95rem" }}>Connect AI models and assistants</p>
+        <p style={{ color: "#666", fontSize: "0.95rem" }}>Connect your AI applications to Nexus MCP servers</p>
       </div>
 
       <div
@@ -72,44 +64,55 @@ export default function ClientsPage() {
         }}
       >
         {clients.map((client) => (
-          <div
+          <Link
             key={client.id}
+            href={client.href}
             style={{
               padding: "1.5rem",
               border: "1px solid #e0e0e0",
               borderRadius: "8px",
               display: "flex",
               flexDirection: "column",
-              backgroundColor: "#fff"
+              backgroundColor: "#fff",
+              textDecoration: "none",
+              color: "inherit",
+              transition: "transform 0.2s, box-shadow 0.2s",
+              cursor: "pointer"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-2px)";
+              e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "none";
             }}
           >
             <div style={{ marginBottom: "1rem" }}>
-              <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🤖</div>
-              <h2 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "0.25rem" }}>{client.name}</h2>
-              <p style={{ color: "#999", fontSize: "0.85rem", marginBottom: "0.5rem" }}>{client.status}</p>
+              <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>{client.icon}</div>
+              <h2 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "0.5rem", color: "#333" }}>
+                {client.name}
+              </h2>
             </div>
 
             <p style={{ color: "#666", fontSize: "0.9rem", marginBottom: "1.5rem", flex: 1 }}>
               {client.description}
             </p>
 
-            <button
-              onClick={() => handleConnect(client.id)}
+            <div
               style={{
-                width: "100%",
                 padding: "0.75rem",
                 backgroundColor: "#0070f3",
                 color: "white",
-                border: "none",
                 borderRadius: "4px",
-                cursor: "pointer",
                 fontSize: "0.9rem",
-                fontWeight: 500
+                fontWeight: 500,
+                textAlign: "center"
               }}
             >
-              Connect
-            </button>
-          </div>
+              Configure →
+            </div>
+          </Link>
         ))}
       </div>
     </div>

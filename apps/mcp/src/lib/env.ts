@@ -1,7 +1,17 @@
 import { config } from "dotenv";
 import { z } from "zod";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-config();
+// Load .env from apps/mcp directory (ESM-compatible)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+// __dirname is apps/mcp/src/lib, so go up two levels to apps/mcp
+const envPath = resolve(__dirname, "../../.env");
+const result = config({ path: envPath });
+if (result.error) {
+  console.warn("Warning: Could not load .env file:", envPath, result.error.message);
+}
 
 const envSchema = z.object({
   API_KEY: z.string().min(1, "API_KEY environment variable is required"),

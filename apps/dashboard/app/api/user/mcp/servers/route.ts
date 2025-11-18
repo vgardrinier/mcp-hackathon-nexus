@@ -88,17 +88,80 @@ export async function GET(req: NextRequest) {
 
     const authenticatedServerIds = new Set(authTokens?.map((t) => t.server_id) || []);
 
-    const result = allServers?.map((server) => ({
-      id: server.id,
-      name: server.name,
-      description: server.description,
-      transport: server.transport,
-      sourceUrl: server.source_url,
-      logoUrl: server.logo_url,
-      requiresAuth: server.requires_auth,
-      installed: installedServerIds.has(server.id),
-      authenticated: authenticatedServerIds.has(server.id)
-    }));
+    // Fetch all env var records to check required env vars for STDIO servers
+    const { data: allEnvVars, error: allEnvVarsError } = await supabaseAdmin
+      .from("mcp_server_environment_vars")
+      .select("id, server_id, required");
+
+    if (allEnvVarsError) {
+      console.error("Failed to fetch all env vars:", allEnvVarsError);
+    }
+
+    // Build map: server_id -> array of required env var IDs
+    const serverRequiredEnvVarIds = new Map<string, string[]>();
+    allEnvVars?.forEach((envVar) => {
+      if (envVar.required) {
+        if (!serverRequiredEnvVarIds.has(envVar.server_id)) {
+          serverRequiredEnvVarIds.set(envVar.server_id, []);
+        }
+        serverRequiredEnvVarIds.get(envVar.server_id)!.push(envVar.id);
+      }
+    });
+
+    // Get user env var values with their env var IDs
+    const { data: userEnvVarValues, error: userEnvVarValuesError } = await supabaseAdmin
+      .from("mcp_server_environment_var_values")
+      .select("environment_var_id, value")
+      .eq("user_id", userId);
+
+    if (userEnvVarValuesError) {
+      console.error("Failed to fetch user env var values:", userEnvVarValuesError);
+    }
+
+    const userEnvVarValuesMap = new Map(
+      userEnvVarValues?.map((v) => [v.environment_var_id, v.value]) || []
+    );
+
+    const result = allServers?.map((server) => {
+      const installed = installedServerIds.has(server.id);
+      const authenticated = authenticatedServerIds.has(server.id);
+      
+      // For STDIO servers, check if all required env vars are set
+      let configured = false;
+      if (installed) {
+        if (server.transport === "stdio") {
+          const requiredEnvVarIds = serverRequiredEnvVarIds.get(server.id) || [];
+          if (requiredEnvVarIds.length === 0) {
+            // No required env vars, so it's configured
+            configured = true;
+          } else {
+            // Check if all required env vars have non-empty values
+            configured = requiredEnvVarIds.every((envVarId) => {
+              const value = userEnvVarValuesMap.get(envVarId);
+              return value != null && value.trim() !== "";
+            });
+          }
+        } else if (server.transport === "streamable-http") {
+          // For HTTP servers, configured = authenticated (if requiresAuth) or always true (if not)
+          configured = server.requires_auth ? authenticated : true;
+        } else {
+          configured = true;
+        }
+      }
+
+      return {
+        id: server.id,
+        name: server.name,
+        description: server.description,
+        transport: server.transport,
+        sourceUrl: server.source_url,
+        logoUrl: server.logo_url,
+        requiresAuth: server.requires_auth,
+        installed,
+        authenticated,
+        configured
+      };
+    });
 
     return NextResponse.json(result || [], { status: 200 });
   } catch (error) {

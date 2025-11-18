@@ -39,31 +39,53 @@ export default function ServerDetailPage() {
   const [oauthMessage, setOauthMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const fetchServerData = () => {
-    fetch("/api/user/mcp/servers")
-      .then((res) => res.json())
+    setLoading(true);
+    fetch("/api/user/mcp/servers", {
+      credentials: "include"
+    })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`Failed to fetch servers: ${res.status}`);
+        }
+        return res.json();
+      })
       .then((servers: Server[]) => {
         const found = servers.find((s) => s.id === serverId);
         if (found) {
           setServer(found);
-          // Fetch env vars
-          return fetch(`/api/user/mcp/servers/${serverId}/env-vars`);
+          // Fetch env vars (only for STDIO servers)
+          if (found.transport === "stdio") {
+            return fetch(`/api/user/mcp/servers/${serverId}/env-vars`, {
+              credentials: "include"
+            })
+              .then((envRes) => {
+                if (!envRes.ok) {
+                  console.error("Failed to fetch env vars:", envRes.status);
+                  // Don't throw - we'll just show empty form
+                  return { envVars: [] };
+                }
+                return envRes.json();
+              })
+              .then((data) => {
+                if (data?.envVars) {
+                  const values: Record<string, string> = {};
+                  data.envVars.forEach((envVar: EnvVar) => {
+                    values[envVar.key] = envVar.value || "";
+                  });
+                  setEnvValues(values);
+                  // Also set env vars on server object for rendering
+                  setServer({ ...found, envVars: data.envVars });
+                }
+              })
+              .catch((error) => {
+                console.error("Error fetching env vars:", error);
+                // Continue anyway - form will show but empty
+              });
+          }
         }
         return null;
       })
-      .then((res) => {
-        if (res) {
-          return res.json();
-        }
-        return null;
-      })
-      .then((data) => {
-        if (data?.envVars) {
-          const values: Record<string, string> = {};
-          data.envVars.forEach((envVar: EnvVar) => {
-            values[envVar.key] = envVar.value || "";
-          });
-          setEnvValues(values);
-        }
+      .then(() => {
         setLoading(false);
       })
       .catch((error) => {
@@ -120,23 +142,46 @@ export default function ServerDetailPage() {
 
   const handleSaveEnvVars = async () => {
     setSaving(true);
-    const res = await fetch(`/api/user/mcp/servers/${serverId}/env`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ envVars: envValues })
-    });
+    try {
+      const res = await fetch(`/api/user/mcp/servers/${serverId}/env`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ envVars: envValues })
+      });
 
-    if (res.ok) {
-      alert("Environment variables saved!");
-    } else {
-      alert("Failed to save environment variables");
+      const data = await res.json();
+
+      if (res.ok) {
+        setOauthMessage({
+          type: "success",
+          text: "Environment variables saved successfully!"
+        });
+        // Refresh server data to show updated values
+        fetchServerData();
+      } else {
+        console.error("Failed to save env vars:", data);
+        setOauthMessage({
+          type: "error",
+          text: `Failed to save: ${data.error || "Unknown error"}`
+        });
+      }
+    } catch (error) {
+      console.error("Error saving env vars:", error);
+      setOauthMessage({
+        type: "error",
+        text: "Failed to save environment variables"
+      });
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const handleOAuth = async () => {
     try {
-      const res = await fetch(`/api/user/mcp/servers/${serverId}/auth/initiate`);
+      const res = await fetch(`/api/user/mcp/servers/${serverId}/auth/initiate`, {
+        credentials: "include"
+      });
       const data = await res.json();
       if (data.redirectUrl) {
         window.location.href = data.redirectUrl;
@@ -208,11 +253,12 @@ export default function ServerDetailPage() {
         </div>
       )}
 
-      {server.transport === "stdio" && server.envVars && server.envVars.length > 0 && (
+      {server.transport === "stdio" && (
         <div style={{ marginBottom: "2rem" }}>
           <h2 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "1rem" }}>Environment Variables</h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {server.envVars.map((envVar) => (
+          {server.envVars && server.envVars.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              {server.envVars.map((envVar) => (
               <div key={envVar.id}>
                 <label
                   htmlFor={envVar.key}
@@ -239,25 +285,33 @@ export default function ServerDetailPage() {
                   <p style={{ fontSize: "0.85rem", color: "#666", marginTop: "0.25rem" }}>{envVar.description}</p>
                 )}
               </div>
-            ))}
-            <button
-              onClick={handleSaveEnvVars}
-              disabled={saving}
-              style={{
-                padding: "0.75rem 1.5rem",
-                backgroundColor: "#28a745",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: saving ? "not-allowed" : "pointer",
-                fontSize: "0.9rem",
-                fontWeight: 500,
-                opacity: saving ? 0.6 : 1
-              }}
-            >
-              {saving ? "Saving..." : "Save Environment Variables"}
-            </button>
-          </div>
+              ))}
+              <button
+                onClick={handleSaveEnvVars}
+                disabled={saving}
+                style={{
+                  padding: "0.75rem 1.5rem",
+                  backgroundColor: "#28a745",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: saving ? "not-allowed" : "pointer",
+                  fontSize: "0.9rem",
+                  fontWeight: 500,
+                  opacity: saving ? 0.6 : 1
+                }}
+              >
+                {saving ? "Saving..." : "Save Environment Variables"}
+              </button>
+            </div>
+          ) : (
+            <div style={{ padding: "1rem", backgroundColor: "#f8f9fa", borderRadius: "4px", color: "#666" }}>
+              <p>Loading environment variable definitions...</p>
+              <p style={{ fontSize: "0.85rem", marginTop: "0.5rem" }}>
+                If this doesn't load, please refresh the page or check the browser console for errors.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
