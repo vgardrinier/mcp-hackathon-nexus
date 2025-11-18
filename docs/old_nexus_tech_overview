@@ -120,3 +120,5 @@ VALUES (
 - OAuth failures → Check redirect URIs match
 - Tool not appearing → Check end server is connected
 - Auth errors → Verify tokens are valid/not expired
+
+
