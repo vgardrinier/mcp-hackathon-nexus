@@ -37,8 +37,10 @@ export default function ServersPage() {
       setTimeout(() => {
         fetch("/api/user/mcp/servers", {
           credentials: "include", // Ensure cookies are sent
+          cache: "no-store",
           headers: {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache"
           }
         })
           .then((res) => {
@@ -78,9 +80,13 @@ export default function ServersPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        // Refresh servers list
+        // Refresh servers list with cache-busting
         const refreshed = await fetch("/api/user/mcp/servers", {
-          credentials: "include"
+          credentials: "include",
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache"
+          }
         }).then((r) => r.json());
         if (Array.isArray(refreshed)) {
           setServers(refreshed);
@@ -96,16 +102,25 @@ export default function ServersPage() {
   };
 
   const handleUninstall = async (serverId: string) => {
+    if (!confirm("Are you sure you want to uninstall this server? This will remove all configuration and authentication data.")) {
+      return;
+    }
+
     try {
       const res = await fetch(`/api/user/mcp/servers/${serverId}`, { 
         method: "DELETE",
-        credentials: "include"
+        credentials: "include",
+        cache: "no-store"
       });
       const data = await res.json();
       if (res.ok) {
-        // Refresh servers list
+        // Refresh servers list with cache-busting
         const refreshed = await fetch("/api/user/mcp/servers", {
-          credentials: "include"
+          credentials: "include",
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache"
+          }
         }).then((r) => r.json());
         if (Array.isArray(refreshed)) {
           setServers(refreshed);

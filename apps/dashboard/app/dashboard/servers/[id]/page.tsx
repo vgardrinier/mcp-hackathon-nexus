@@ -37,11 +37,18 @@ export default function ServerDetailPage() {
   const [envValues, setEnvValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [oauthMessage, setOauthMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [manualToken, setManualToken] = useState("");
+  const [savingToken, setSavingToken] = useState(false);
+  const [showManualToken, setShowManualToken] = useState(false);
 
   const fetchServerData = () => {
     setLoading(true);
     fetch("/api/user/mcp/servers", {
-      credentials: "include"
+      credentials: "include",
+      cache: "no-store",
+      headers: {
+        "Cache-Control": "no-cache"
+      }
     })
       .then((res) => {
         if (!res.ok) {
@@ -193,6 +200,80 @@ export default function ServerDetailPage() {
     }
   };
 
+  const handleManualToken = async () => {
+    if (!manualToken.trim()) {
+      setOauthMessage({ type: "error", text: "Please enter a token" });
+      return;
+    }
+
+    if (!manualToken.trim().startsWith("secret_")) {
+      setOauthMessage({ 
+        type: "error", 
+        text: "Invalid token format. Notion integration tokens must start with 'secret_'. Get yours from https://www.notion.so/my-integrations" 
+      });
+      return;
+    }
+
+    setSavingToken(true);
+    try {
+      const res = await fetch(`/api/user/mcp/servers/${serverId}/auth/manual-token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ token: manualToken.trim() })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setOauthMessage({ 
+          type: "success", 
+          text: "Integration token saved! Restart the MCP server for it to take effect." 
+        });
+        setManualToken("");
+        setShowManualToken(false);
+        // Refresh server data
+        fetchServerData();
+      } else {
+        setOauthMessage({ type: "error", text: data.error || "Failed to save token" });
+      }
+    } catch (error) {
+      setOauthMessage({ type: "error", text: "Failed to save token" });
+    } finally {
+      setSavingToken(false);
+    }
+  };
+
+  const handleUninstall = async () => {
+    if (!confirm(`Are you sure you want to uninstall ${server?.name}? This will remove all configuration and authentication data.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/user/mcp/servers/${serverId}`, { 
+        method: "DELETE",
+        credentials: "include"
+      });
+      const data = await res.json();
+      if (res.ok) {
+        // Redirect to servers list after successful uninstall
+        router.push("/dashboard/servers");
+      } else {
+        console.error("Failed to uninstall server:", data);
+        setOauthMessage({
+          type: "error",
+          text: `Failed to uninstall server: ${data.error || "Unknown error"}`
+        });
+      }
+    } catch (error) {
+      console.error("Error uninstalling server:", error);
+      setOauthMessage({
+        type: "error",
+        text: "Failed to uninstall server"
+      });
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <div style={{ padding: "2rem" }}>
@@ -331,8 +412,96 @@ export default function ServerDetailPage() {
             </div>
           ) : (
             <div>
+              {serverId === "notion-http" && (
+                <div style={{ marginBottom: "1.5rem", padding: "1rem", backgroundColor: "#fff3cd", border: "1px solid #ffc107", borderRadius: "4px" }}>
+                  <p style={{ marginBottom: "0.5rem", fontWeight: 500, color: "#856404" }}>
+                    ⚠️ Notion OAuth returns tokens that don't work with the MCP server
+                  </p>
+                  <p style={{ fontSize: "0.9rem", color: "#856404", marginBottom: "0.5rem" }}>
+                    Use a manual integration token instead (recommended). Get yours from{" "}
+                    <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener noreferrer" style={{ color: "#0070f3" }}>
+                      https://www.notion.so/my-integrations
+                    </a>
+                  </p>
+                  <p style={{ fontSize: "0.85rem", color: "#856404", fontStyle: "italic", marginBottom: "1rem", padding: "0.5rem", backgroundColor: "#fff", borderRadius: "4px" }}>
+                    ⚠️ Important: You need an <strong>Integration Token</strong> (from "My Integrations"), NOT your OAuth Client Secret. 
+                    Create a new integration and copy its "Internal Integration Token".
+                  </p>
+                  {!showManualToken ? (
+                    <button
+                      onClick={() => setShowManualToken(true)}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        backgroundColor: "#ffc107",
+                        color: "#856404",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                        fontSize: "0.9rem",
+                        fontWeight: 500
+                      }}
+                    >
+                      Enter Integration Token (secret_*)
+                    </button>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                      <input
+                        type="password"
+                        value={manualToken}
+                        onChange={(e) => setManualToken(e.target.value)}
+                        placeholder="secret_..."
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem",
+                          border: "1px solid #ccc",
+                          borderRadius: "4px",
+                          fontSize: "0.9rem"
+                        }}
+                      />
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <button
+                          onClick={handleManualToken}
+                          disabled={savingToken}
+                          style={{
+                            padding: "0.5rem 1rem",
+                            backgroundColor: "#28a745",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: savingToken ? "not-allowed" : "pointer",
+                            fontSize: "0.9rem",
+                            fontWeight: 500,
+                            opacity: savingToken ? 0.6 : 1
+                          }}
+                        >
+                          {savingToken ? "Saving..." : "Save Token"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowManualToken(false);
+                            setManualToken("");
+                          }}
+                          style={{
+                            padding: "0.5rem 1rem",
+                            backgroundColor: "#6c757d",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "0.9rem"
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               <p style={{ marginBottom: "1rem", color: "#666" }}>
-                This server requires OAuth authentication. Click the button below to connect.
+                {serverId === "notion-http" 
+                  ? "Alternatively, you can try OAuth (but it may not work):"
+                  : "This server requires OAuth authentication. Click the button below to connect."}
               </p>
               <button
                 onClick={handleOAuth}
@@ -347,10 +516,34 @@ export default function ServerDetailPage() {
                   fontWeight: 500
                 }}
               >
-                Connect with {server.name}
+                Connect with {server.name} (OAuth)
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {server.installed && (
+        <div style={{ marginTop: "2rem", paddingTop: "2rem", borderTop: "1px solid #e0e0e0" }}>
+          <h2 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "1rem", color: "#dc3545" }}>Danger Zone</h2>
+          <p style={{ color: "#666", fontSize: "0.9rem", marginBottom: "1rem" }}>
+            Uninstalling this server will remove all configuration, authentication tokens, and environment variables.
+          </p>
+          <button
+            onClick={handleUninstall}
+            style={{
+              padding: "0.75rem 1.5rem",
+              backgroundColor: "#dc3545",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontSize: "0.9rem",
+              fontWeight: 500
+            }}
+          >
+            Uninstall Server
+          </button>
         </div>
       )}
     </div>

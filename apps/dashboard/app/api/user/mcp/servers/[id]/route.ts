@@ -173,7 +173,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       return NextResponse.json({ error: "Missing server ID" }, { status: 400 });
     }
 
-    // Uninstall server
+    // Uninstall server - delete from mcp_server_users first
     const { error: uninstallError } = await supabaseAdmin
       .from("mcp_server_users")
       .delete()
@@ -181,7 +181,41 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       .eq("server_id", serverId);
 
     if (uninstallError) {
+      console.error("Failed to uninstall server:", uninstallError);
       return NextResponse.json({ error: "Failed to uninstall server" }, { status: 500 });
+    }
+
+    // Clean up related data: auth tokens
+    const { error: authTokenError } = await supabaseAdmin
+      .from("mcp_server_user_auth_tokens")
+      .delete()
+      .eq("user_id", userId)
+      .eq("server_id", serverId);
+
+    if (authTokenError) {
+      console.error("Failed to delete auth tokens (non-fatal):", authTokenError);
+      // Don't fail the request if this fails, but log it
+    }
+
+    // Clean up related data: environment variable values
+    // First get the env var IDs for this server
+    const { data: envVars, error: envVarsError } = await supabaseAdmin
+      .from("mcp_server_environment_vars")
+      .select("id")
+      .eq("server_id", serverId);
+
+    if (!envVarsError && envVars && envVars.length > 0) {
+      const envVarIds = envVars.map((ev) => ev.id);
+      const { error: envValuesError } = await supabaseAdmin
+        .from("mcp_server_environment_var_values")
+        .delete()
+        .eq("user_id", userId)
+        .in("environment_var_id", envVarIds);
+
+      if (envValuesError) {
+        console.error("Failed to delete env var values (non-fatal):", envValuesError);
+        // Don't fail the request if this fails, but log it
+      }
     }
 
     return NextResponse.json({ success: true }, { status: 200 });
