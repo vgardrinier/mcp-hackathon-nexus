@@ -37,6 +37,7 @@ function isAuthorized(req: Request): boolean {
 async function handleMCPRequest(req: Request, res: Response) {
   try {
     if (!isAuthorized(req)) {
+      console.log(`\x1B[91m[Auth] Unauthorized request from ${req.headers["user-agent"] || "unknown"}\x1B[0m`);
       res.status(401).json({ error: "Unauthorized: Invalid API key" });
       return;
     }
@@ -48,26 +49,48 @@ async function handleMCPRequest(req: Request, res: Response) {
 
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     const method = (req.body as any)?.method;
+    const bodyStr = JSON.stringify(req.body).substring(0, 200);
     console.log(
-      `\x1B[90m[Request] Method: ${method || "unknown"}, Session: ${sessionId || "none"}, Headers: ${JSON.stringify(Object.keys(req.headers))}\x1B[0m`
+      `\x1B[94m[Request] ${method || "unknown"} | Session: ${sessionId || "NEW"} | Body: ${bodyStr}...\x1B[0m`
     );
+    
+    // Log all relevant headers for debugging
+    const relevantHeaders = {
+      "mcp-session-id": req.headers["mcp-session-id"],
+      "Mcp-Session-Id": req.headers["mcp-session-id"],
+      "authorization": req.headers["authorization"] ? "Bearer ***" : undefined,
+      "accept": req.headers["accept"],
+      "content-type": req.headers["content-type"],
+      "user-agent": req.headers["user-agent"]
+    };
+    console.log(`\x1B[90m[Headers] ${JSON.stringify(relevantHeaders, null, 2)}\x1B[0m`);
     
     let transport: StreamableHTTPServerTransport;
 
     if (sessionId && transports[sessionId]) {
       transport = transports[sessionId];
-      console.log(`\x1B[90m[Request] Using existing session: ${sessionId}\x1B[0m`);
+      console.log(`\x1B[92m[Session] ✅ Using existing session: ${sessionId}\x1B[0m`);
     } else if (!sessionId && isInitializeRequest(req.body)) {
+      console.log(`\x1B[93m[Session] 🔄 Creating new session for initialize request\x1B[0m`);
+      const newSessionId = randomUUID();
+      
+      // Set headers BEFORE creating transport so they're available when SDK writes response
+      res.setHeader("Mcp-Session-Id", newSessionId);
+      res.setHeader("mcp-session-id", newSessionId);
+      res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id, mcp-session-id, *");
+      
       transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-        onsessioninitialized: (newSessionId) => {
-          transports[newSessionId] = transport;
-          console.log(`\x1B[94m[Client] New session initialized: ${newSessionId}\x1B[0m`);
-          // Explicitly set both header casing variants for Cursor compatibility
-          res.setHeader("Mcp-Session-Id", newSessionId);
-          res.setHeader("mcp-session-id", newSessionId);
-          res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id, mcp-session-id, *");
-          console.log(`\x1B[90m[Session] Set headers: Mcp-Session-Id=${newSessionId}\x1B[0m`);
+        sessionIdGenerator: () => newSessionId,
+        onsessioninitialized: (initializedSessionId) => {
+          transports[initializedSessionId] = transport;
+          console.log(`\x1B[92m[Session] ✅ New session initialized: ${initializedSessionId}\x1B[0m`);
+          // Ensure headers are still set (SDK might overwrite, so set again)
+          if (!res.headersSent) {
+            res.setHeader("Mcp-Session-Id", initializedSessionId);
+            res.setHeader("mcp-session-id", initializedSessionId);
+            res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id, mcp-session-id, *");
+          }
+          console.log(`\x1B[90m[Session] Headers confirmed: Mcp-Session-Id=${initializedSessionId}, mcp-session-id=${initializedSessionId}\x1B[0m`);
         }
       });
 
@@ -110,31 +133,26 @@ async function handleMCPRequest(req: Request, res: Response) {
       return;
     }
 
-    // Intercept response to ensure session headers are set on every response
-    const originalEnd = res.end.bind(res);
-    const originalWrite = res.write.bind(res);
-    
-    res.write = function(chunk?: any, encoding?: any, cb?: any) {
-      if (transport.sessionId && !res.headersSent) {
+    // Ensure session headers are set before SDK handles the request
+    // For existing sessions, set headers if not already sent
+    if (transport.sessionId) {
+      if (!res.headersSent) {
         res.setHeader("Mcp-Session-Id", transport.sessionId);
         res.setHeader("mcp-session-id", transport.sessionId);
         res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id, mcp-session-id, *");
       }
-      return originalWrite(chunk, encoding, cb);
-    };
-    
-    res.end = function(chunk?: any, encoding?: any, cb?: any) {
-      if (transport.sessionId && !res.headersSent) {
-        res.setHeader("Mcp-Session-Id", transport.sessionId);
-        res.setHeader("mcp-session-id", transport.sessionId);
-        res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id, mcp-session-id, *");
-      }
-      return originalEnd(chunk, encoding, cb);
-    };
+    }
 
+    // Handle the request - SDK will manage the SSE response stream
     await transport.handleRequest(req, res, req.body);
+    
+    // Log response completion (note: for SSE, this may log before stream closes)
+    console.log(`\x1B[90m[Response] ${method || "unknown"} handled | Session: ${transport.sessionId || "none"}\x1B[0m`);
   } catch (error) {
-    console.error("Error handling MCP request:", error);
+    console.error(`\x1B[91m[Error] ❌ Error handling MCP request: ${error instanceof Error ? error.message : String(error)}\x1B[0m`);
+    if (error instanceof Error && error.stack) {
+      console.error(`\x1B[91m[Error] Stack: ${error.stack}\x1B[0m`);
+    }
     if (!res.headersSent) {
       res.status(500).json(InternalServerErrorResponseSkeleton);
     }

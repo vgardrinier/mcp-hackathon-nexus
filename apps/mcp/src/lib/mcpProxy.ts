@@ -118,12 +118,8 @@ function hasServerConfigChanged(existing: EndServerData, incoming: EndServerData
   return false;
 }
 
-const customTools: Array<{
-  name: string;
-  description: string;
-  inputSchema: object;
-  execute: () => Promise<{ content: unknown; isError?: boolean }>;
-}> = [
+// Custom tools that are always available
+const customTools: Tool[] = [
   {
     name: "list-end-servers",
     description: "List the MCP servers the user has installed for this Nexus API key.",
@@ -131,8 +127,22 @@ const customTools: Array<{
       type: "object",
       properties: {},
       additionalProperties: false
-    },
-    execute: async () => {
+    }
+  },
+  {
+    name: "list-server-status",
+    description: "List basic connection status for installed MCP servers.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      additionalProperties: false
+    }
+  }
+];
+
+// Store execute functions separately for tool calls
+const customToolExecutors: Record<string, () => Promise<{ content: unknown; isError?: boolean }>> = {
+  "list-end-servers": async () => {
       const formatServer = (endServer: EndServer) => ({
         id: endServer.id,
         name: endServer.name,
@@ -159,17 +169,8 @@ const customTools: Array<{
           isError: true
         };
       }
-    }
   },
-  {
-    name: "list-server-status",
-    description: "List basic connection status for installed MCP servers.",
-    inputSchema: {
-      type: "object",
-      properties: {},
-      additionalProperties: false
-    },
-    execute: async () => {
+  "list-server-status": async () => {
       return {
         content: Object.values(endServers).map((endServer) => ({
           id: endServer.id,
@@ -179,19 +180,22 @@ const customTools: Array<{
         isError: false
       };
     }
-  }
-];
+};
 
 proxyMCPServer.setRequestHandler(ListToolsRequestSchema, async () => {
-  console.log("\x1B[94m[Client] Requested tools list...\x1B[0m");
-  console.log(`\x1B[90m[Tools] End servers available: ${Object.keys(endServers).length}\x1B[0m`);
+  console.log("\x1B[94m[Tools] 📋 Client requested tools list...\x1B[0m");
+  console.log(`\x1B[90m[Tools] End servers registered: ${Object.keys(endServers).length}\x1B[0m`);
   
   // Debug: Log all registered end servers and their transport status
   if (Object.keys(endServers).length > 0) {
-    console.log(`\x1B[90m[Tools] Registered end servers: ${Object.keys(endServers).map(id => {
+    const serverStatus = Object.keys(endServers).map(id => {
       const server = endServers[id];
-      return `${server.name} (id: ${id}, transport: ${server.isTransportCreated ? 'created' : 'not created'})`;
-    }).join(', ')}\x1B[0m`);
+      const status = server.isTransportCreated ? '✅ ready' : '❌ transport not created';
+      return `${server.name} (${status})`;
+    }).join(', ');
+    console.log(`\x1B[90m[Tools] Registered servers: ${serverStatus}\x1B[0m`);
+  } else {
+    console.log(`\x1B[93m[Tools] ⚠️  No end servers registered. Only custom tools will be available.\x1B[0m`);
   }
 
   const toolsPerServer: Record<string, Tool[]> = {};
@@ -222,16 +226,26 @@ proxyMCPServer.setRequestHandler(ListToolsRequestSchema, async () => {
   );
 
   const allTools = [...customTools, ...namespacedTools];
-  console.log(`\x1B[90m[Tools] Returning ${allTools.length} tools (${customTools.length} custom + ${namespacedTools.length} from end servers)\x1B[0m`);
-  return { tools: allTools };
+  console.log(`\x1B[92m[Tools] ✅ Returning ${allTools.length} tools total:\x1B[0m`);
+  console.log(`\x1B[90m[Tools]   - ${customTools.length} custom tools: ${customTools.map(t => t.name).join(', ')}\x1B[0m`);
+  if (namespacedTools.length > 0) {
+    console.log(`\x1B[90m[Tools]   - ${namespacedTools.length} end server tools: ${namespacedTools.slice(0, 5).map(t => t.name).join(', ')}${namespacedTools.length > 5 ? '...' : ''}\x1B[0m`);
+  }
+  
+  const response = { tools: allTools };
+  console.log(`\x1B[90m[Tools] Response: ${JSON.stringify(response).substring(0, 300)}...\x1B[0m`);
+  return response;
 });
 
 proxyMCPServer.setRequestHandler(CallToolRequestSchema, async (request) => {
-  console.log(`\x1B[94m[Client] Requested tool call: ${request.params.name}\x1B[0m`);
+  console.log(`\x1B[94m[Tool Call] 🔧 Client requested: ${request.params.name}\x1B[0m`);
 
-  const customTool = customTools.find((tool) => tool.name === request.params.name);
-  if (customTool) {
-    return await customTool.execute();
+  const customToolExecutor = customToolExecutors[request.params.name];
+  if (customToolExecutor) {
+    console.log(`\x1B[90m[Tool Call] Executing custom tool: ${request.params.name}\x1B[0m`);
+    const result = await customToolExecutor();
+    console.log(`\x1B[92m[Tool Call] ✅ Custom tool completed: ${request.params.name}\x1B[0m`);
+    return result;
   }
 
   if (request.params.name.endsWith("_nxs")) {

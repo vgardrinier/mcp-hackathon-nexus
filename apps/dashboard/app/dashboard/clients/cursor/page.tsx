@@ -38,6 +38,7 @@ export default function CursorClientPage() {
     if (!apiKey) return "";
 
     if (activeTab === "http") {
+      // Cursor format: mcpServers object with url and headers
       return JSON.stringify(
         {
           mcpServers: {
@@ -53,6 +54,7 @@ export default function CursorClientPage() {
         2
       );
     } else {
+      // STDIO format
       return JSON.stringify(
         {
           mcpServers: {
@@ -74,9 +76,9 @@ export default function CursorClientPage() {
 
   const getConfigPath = () => {
     return {
-      windows: "%APPDATA%\\Cursor\\User\\globalStorage\\saoudrizwan.claude-dev\\settings\\cline_mcp_settings.json",
-      macos: "~/Library/Application Support/Cursor/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-      linux: "~/.config/Cursor/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
+      windows: "%USERPROFILE%\\.cursor\\mcp.json",
+      macos: "~/.cursor/mcp.json",
+      linux: "~/.cursor/mcp.json"
     };
   };
 
@@ -249,6 +251,7 @@ export default function CursorClientPage() {
     </div>
   );
 }
+
 
 
 
