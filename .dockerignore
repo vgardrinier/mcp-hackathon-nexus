@@ -1,0 +1,19 @@
+# General
+.git
+.DS_Store
+node_modules
+**/node_modules
+pnpm-store
+tmp
+*.log
+
+# Build output
+.next
+dist
+out
+coverage
+
+# Environment
+.env
+apps/dashboard/.env
+apps/mcp/.env

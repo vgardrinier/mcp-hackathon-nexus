@@ -95,15 +95,19 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Triggers for updated_at
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_mcp_servers_updated_at ON mcp_servers;
 CREATE TRIGGER update_mcp_servers_updated_at BEFORE UPDATE ON mcp_servers
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_mcp_server_user_auth_tokens_updated_at ON mcp_server_user_auth_tokens;
 CREATE TRIGGER update_mcp_server_user_auth_tokens_updated_at BEFORE UPDATE ON mcp_server_user_auth_tokens
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_mcp_server_environment_var_values_updated_at ON mcp_server_environment_var_values;
 CREATE TRIGGER update_mcp_server_environment_var_values_updated_at BEFORE UPDATE ON mcp_server_environment_var_values
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -195,6 +199,62 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+
+-- ============================================
+-- MIGRATION 004: Grant RPC Permissions
+-- ============================================
+
+GRANT EXECUTE ON FUNCTION setup_new_user(UUID, TEXT) TO service_role;
+
+-- ============================================
+-- MIGRATION 007: Fix Trigger and Permissions
+-- ============================================
+
+-- Ensure function exists and permissions are correct
+CREATE OR REPLACE FUNCTION setup_new_user(user_id UUID, user_email TEXT)
+RETURNS TEXT AS $$
+DECLARE
+  generated_api_key TEXT;
+BEGIN
+  generated_api_key := gen_random_uuid()::text;
+
+  INSERT INTO users (id, email, api_key)
+  VALUES (user_id, user_email, generated_api_key)
+  ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
+
+  INSERT INTO mcp_server_users (user_id, server_id)
+  VALUES
+    (user_id, 'github-stdio'),
+    (user_id, 'notion-http')
+  ON CONFLICT (user_id, server_id) DO NOTHING;
+
+  RETURN generated_api_key;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION setup_new_user(UUID, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION setup_new_user(UUID, TEXT) TO postgres;
+GRANT EXECUTE ON FUNCTION setup_new_user(UUID, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION setup_new_user(UUID, TEXT) TO anon;
+
+-- Recreate trigger function with error logging
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  PERFORM setup_new_user(NEW.id, NEW.email);
+  RETURN NEW;
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE WARNING 'Error in handle_new_user: %', SQLERRM;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW 
+  EXECUTE FUNCTION handle_new_user();
 
 -- ============================================
 -- DONE! All migrations complete.
