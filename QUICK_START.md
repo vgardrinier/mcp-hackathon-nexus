@@ -1,12 +1,14 @@
 # Quick Start Guide
 
+Prefer Docker Compose? See `DOCKER_COMPOSE.md` for a two-container setup (dashboard + MCP).
+
 ## Why Cursor MCP is Still Loading (Orange)
 
 The MCP connection is loading because:
 1. ✅ Database migrations haven't run yet
 2. ✅ You haven't signed up / gotten your API key
 3. ✅ MCP server isn't running
-4. ✅ API key isn't set in `apps/mcp/.env.local`
+4. ✅ API key isn't set in `apps/mcp/.env`
 
 ## Step-by-Step Fix
 
@@ -41,7 +43,7 @@ Dashboard will start at: http://localhost:3000
 
 ### 4. Configure MCP Server
 
-Edit `apps/mcp/.env.local`:
+Edit `apps/mcp/.env` (copy from `.env.example` first):
 
 ```bash
 API_KEY=paste-your-api-key-here
@@ -80,7 +82,7 @@ In Cursor, you should see:
 
 **Still orange?**
 - Check MCP server is running: `curl http://localhost:3001/mcp` (should return JSON-RPC error, not connection refused)
-- Check API key matches: Compare `apps/mcp/.env.local` API_KEY with `/dashboard/account`
+- Check API key matches: Compare `apps/mcp/.env` API_KEY with `/dashboard/account`
 - Check Cursor config has correct URL: `http://localhost:3001/mcp`
 - Check Cursor config has correct Authorization header: `Bearer <your-api-key>`
 
@@ -90,6 +92,6 @@ In Cursor, you should see:
 - Check MCP server logs for errors
 
 **MCP server won't start?**
-- Check `apps/mcp/.env.local` has all required vars
+- Check `apps/mcp/.env` has all required vars
 - Check dashboard is running (MCP server needs to fetch config from it)
 - Check API key is valid (should match what's in Supabase `users` table)

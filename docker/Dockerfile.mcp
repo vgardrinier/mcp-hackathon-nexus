@@ -1,0 +1,13 @@
+FROM node:20-bookworm-slim
+
+WORKDIR /app
+
+# Enable pnpm via corepack
+RUN corepack enable
+
+# Bring in the source (dependencies will be installed at runtime via docker-compose)
+COPY . .
+
+ENV NODE_ENV=development
+
+EXPOSE 3001
