@@ -1,0 +1,124 @@
+## 🔧 Technical Deep Dive
+
+### Database Schema
+
+**Key Tables:**
+
+1. **`users`**
+   - User accounts
+   - API keys for MCP server access
+
+2. **`mcp_servers`**
+   - Available servers in marketplace
+   - Config (transport type, command/URL)
+   - OAuth client info
+
+3. **`mcp_server_users`**
+   - User-server relationships
+   - Tracks if auth is required
+
+4. **`mcp_server_user_auth_tokens`**
+   - OAuth tokens (access, refresh)
+   - Expiration tracking
+
+5. **`mcp_server_environment_vars`**
+   - Required env vars per server
+   - User-specific values
+
+### API Routes
+
+**Dashboard APIs (`/api/user/mcp/servers`):**
+- `GET /api/mcp/servers` - List all servers (marketplace)
+- `POST /api/user/mcp/servers/[id]` - Install server
+- `GET /api/user/mcp/servers/[id]/auth/initiate` - Start OAuth
+- `GET /api/user/mcp/servers/[id]/auth/complete` - Complete OAuth
+- `POST /api/user/mcp/servers/[id]/env` - Set env vars
+
+**External APIs (`/api/external/user/mcp/servers`):**
+- Used by MCP server to fetch user's installed servers
+- Requires API key authentication
+- Returns server configs with tokens/env vars
+
+### MCP Server Architecture
+
+**Main Components:**
+
+1. **`proxyMCPServer`** (`lib/mcp-server/server.ts`)
+   - Main MCP server instance
+   - Handles tool calls
+   - Routes to end servers
+
+2. **`EndServer`** (`lib/end-server/server.ts`)
+   - Manages connection to one end server
+   - Handles transport (STDIO/HTTP)
+   - Manages tool registration
+
+3. **Transport Layer**
+   - `StdioClientTransport` - For STDIO servers
+   - `AuthenticatedStreamableHTTPClientTransport` - For HTTP servers
+
+**Flow:**
+```
+1. MCP server starts
+2. Fetches user's installed servers from dashboard API
+3. For each server:
+   - Creates EndServer instance
+   - Connects via appropriate transport
+   - Registers tools with namespacing
+4. Client connects to Nexus MCP
+5. Client calls tool (e.g., `github_0_search_repos`)
+6. Nexus routes to GitHub end server
+7. Returns result to client
+```
+
+---
+
+## 🛠️ Common Tasks
+
+### Adding a New MCP Server
+
+**Step 1: Add to Database**
+```typescript
+// Option 1: Use admin API route
+GET /api/admin/add-notion-server
+
+// Option 2: Direct SQL
+INSERT INTO mcp_servers (name, description, config, source_url)
+VALUES (
+  'Notion',
+  'Official Notion MCP server',
+  '{"transport": "streamable-http", "url": "https://mcp.notion.com/mcp"}'::jsonb,
+  'https://github.com/notionhq/notion-mcp-server'
+);
+```
+
+**Step 2: Determine Auth Type**
+- **STDIO**: Add env vars to `mcp_server_environment_vars` table
+- **HTTP**: OAuth handled automatically (if server supports it)
+
+**Step 3: Test**
+- Install via dashboard
+- Authenticate
+- Verify tools appear in MCP client
+
+### Debugging
+
+**Dashboard Issues:**
+- Check browser console for errors
+- Check terminal for server errors
+- Verify Supabase connection
+- Check environment variables
+
+**MCP Server Issues:**
+- Check MCP server logs
+- Verify API key is correct
+- Check end server connections
+- Verify tokens/env vars are present
+
+**Common Issues:**
+- `localStorage` errors → Node.js 25 issue, use `'use client'` directive
+- OAuth failures → Check redirect URIs match
+- Tool not appearing → Check end server is connected
+- Auth errors → Verify tokens are valid/not expired
+
+
