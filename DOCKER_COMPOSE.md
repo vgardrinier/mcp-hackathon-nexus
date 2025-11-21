@@ -9,7 +9,7 @@ This repo now ships a Compose setup that runs both services (Next.js dashboard +
 
 ## One-time setup
 1) Dashboard env: copy `apps/dashboard/.env.example` to `apps/dashboard/.env` and fill:
-   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+   - `SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
    - Optional Notion OAuth client if you plan to test that flow
 2) MCP env: copy `apps/mcp/.env.example` to `apps/mcp/.env` and fill:
    - `API_KEY` from the dashboard (`/dashboard/account`)
