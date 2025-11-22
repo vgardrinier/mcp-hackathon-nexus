@@ -18,6 +18,7 @@ export class EndServer {
   private readonly nameValue: string;
   private readonly descriptionValue?: string;
   private readonly sourceUrlValue?: string;
+  private readonly categoryValue?: string;
   private readonly installedOnValue?: Date | string;
   private readonly logoUrlValue?: string;
   private readonly config: EndServerConfig;
@@ -38,6 +39,7 @@ export class EndServer {
     this.nameValue = data.name;
     this.descriptionValue = data.description;
     this.sourceUrlValue = data.sourceUrl;
+    this.categoryValue = data.category;
     this.installedOnValue = data.installedOn;
     this.logoUrlValue = data.logoUrl;
     this.config = data.config;
@@ -61,6 +63,10 @@ export class EndServer {
 
   get sourceUrl() {
     return this.sourceUrlValue;
+  }
+
+  get category() {
+    return this.categoryValue;
   }
 
   get installedOn() {
@@ -269,5 +275,3 @@ export class EndServer {
     console.log(`\x1B[90m[${this.nameValue}] Initialized.\x1B[0m`);
   }
 }
-
-

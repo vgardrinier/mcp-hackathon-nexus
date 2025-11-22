@@ -28,8 +28,6 @@ services:
       && pnpm dev:mcp:http"
     env_file:
       - ./apps/mcp/.env
-    environment:
-      DASHBOARD_URL: http://dashboard:3000
     ports:
       - "3001:3001"
     volumes:

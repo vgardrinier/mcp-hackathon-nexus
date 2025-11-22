@@ -6,9 +6,8 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { EndServer } from "./endServer/endServer.js";
 import type { EndServerData } from "./endServer/types.js";
-import { getUserEndServers } from "./dashboardClient.js";
 import { hasValidEnv, parseNamespacedToolName } from "./mcpUtils.js";
-import { env } from "./env.js";
+import { loadConfiguredEndServers } from "./configLoader.js";
 
 const SERVER_INFO = {
   name: "Nexus L2 MCP",
@@ -95,10 +94,10 @@ async function unregisterEndServer(serverId: string) {
 function hasServerConfigChanged(existing: EndServerData, incoming: EndServerData): boolean {
   // Check env vars
   const existingEnvVars = JSON.stringify(
-    existing.environmentVariables.map((v) => ({ key: v.key, value: v.value })).sort()
+    existing.environmentVariables.map((v) => ({ key: v.key, value: v.value, required: v.required })).sort()
   );
   const incomingEnvVars = JSON.stringify(
-    incoming.environmentVariables.map((v) => ({ key: v.key, value: v.value })).sort()
+    incoming.environmentVariables.map((v) => ({ key: v.key, value: v.value, required: v.required })).sort()
   );
 
   if (existingEnvVars !== incomingEnvVars) {
@@ -112,6 +111,18 @@ function hasServerConfigChanged(existing: EndServerData, incoming: EndServerData
 
   // Check config (command, args, url)
   if (JSON.stringify(existing.config) !== JSON.stringify(incoming.config)) {
+    return true;
+  }
+
+  if (
+    existing.name !== incoming.name ||
+    existing.description !== incoming.description ||
+    existing.sourceUrl !== incoming.sourceUrl ||
+    existing.category !== incoming.category ||
+    existing.logoUrl !== incoming.logoUrl ||
+    existing.requiresAuth !== incoming.requiresAuth ||
+    existing.accessTokenExpiresAt !== incoming.accessTokenExpiresAt
+  ) {
     return true;
   }
 
@@ -148,6 +159,7 @@ const customToolExecutors: Record<string, () => Promise<{ content: unknown; isEr
         name: endServer.name,
         description: endServer.description,
         sourceUrl: endServer.sourceUrl,
+        category: endServer.category,
         installedOn: endServer.installedOn,
         logoUrl: endServer.logoUrl,
         requiredEnvVars: endServer.environmentVariables.map((envVar) => envVar.key)
@@ -261,7 +273,7 @@ async function syncEndServers() {
   let latestEndServers: EndServerData[] = [];
 
   try {
-    latestEndServers = await getUserEndServers();
+    latestEndServers = await loadConfiguredEndServers();
   } catch (error) {
     console.log(
       `\x1B[90mSkipping sync: ${error instanceof Error ? error.message : String(error)}\x1B[0m`
@@ -341,16 +353,16 @@ export async function initializeServer() {
   let userEndServers: EndServerData[] = [];
 
   try {
-    userEndServers = await getUserEndServers();
-    console.log(`\x1B[90mFetched ${userEndServers.length} end servers.\x1B[0m`);
+    userEndServers = await loadConfiguredEndServers();
+    console.log(`\x1B[90mLoaded ${userEndServers.length} end servers from config.\x1B[0m`);
   } catch (error) {
     console.error(
-      "\x1B[91mFailed to fetch end servers from dashboard:",
+      "\x1B[91mFailed to load end servers from config:",
       error instanceof Error ? error.message : String(error),
       "\x1B[0m"
     );
     console.log(
-      "\x1B[90mMCP server will continue without end servers. Fix the dashboard connection and restart.\x1B[0m"
+      "\x1B[90mMCP server will continue without end servers. Fix the config and restart.\x1B[0m"
     );
     return;
   }
@@ -467,5 +479,3 @@ function handleFatal(error: Error | string, type: "exception" | "rejection") {
 
 process.on("uncaughtException", (error) => handleFatal(error, "exception"));
 process.on("unhandledRejection", (reason: Error | string) => handleFatal(reason, "rejection"));
-
-

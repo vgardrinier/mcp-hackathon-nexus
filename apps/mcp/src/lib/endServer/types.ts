@@ -11,6 +11,7 @@ export interface EndServerSummary {
   name: string;
   description?: string;
   sourceUrl?: string;
+  category?: string;
   installedOn?: Date | string;
 }
 
@@ -52,6 +53,7 @@ export interface EndServerData {
   name: string;
   description?: string;
   sourceUrl?: string;
+  category?: string;
   installedOn?: Date | string;
   config: EndServerConfig;
   environmentVariables: EndServerEnvVariable[];
@@ -60,5 +62,3 @@ export interface EndServerData {
   accessToken?: string;
   accessTokenExpiresAt?: string | null;
 }
-
-
