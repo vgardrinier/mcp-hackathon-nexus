@@ -16,10 +16,10 @@ Export tokens for the built-in servers before starting:
 ## 2. Understand the file layout
 
 ```
-apps/mcp/servers/config.yml          # lists source folders
+apps/mcp/servers/default/config.yml          # meta + optional sources (repo source is auto-included)
 apps/mcp/servers/default/github/config.yml
 apps/mcp/servers/default/notion/config.yml
-apps/mcp/servers/custom/             # gitignored, for your personal servers
+~/.config/nexus/servers/custom/              # user servers (Windows: %APPDATA%/nexus/servers/custom/)
 ```
 
 Add a new server by creating a folder with a `config.yml` inside one of the source paths. The YAML fields mirror the old DB columns: `id`, `name`, `transport`, `command/args` or `url`, `env` entries with `valueFromEnv`, and optional `accessTokenFromEnv` for HTTP servers.

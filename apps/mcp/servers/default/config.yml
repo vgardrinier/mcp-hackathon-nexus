@@ -1,0 +1,6 @@
+meta:
+  name: "Nexus Official Servers"
+  description: "Built-in MCP servers shipped with the Nexus repo."
+  authors:
+    - "Nexus Team"
+  about: "Contains the default MCP servers (e.g., GitHub, Notion)."

@@ -1,6 +1,8 @@
 import fs from "node:fs";
+import os from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { config as loadEnvFile } from "dotenv";
 import YAML from "yaml";
 import { z } from "zod";
 import type { EndServerConfig, EndServerData, EndServerEnvVariable } from "./endServer/types.js";
@@ -10,12 +12,45 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const appRoot = resolve(__dirname, "../.."); // apps/mcp
 
-const DEFAULT_CONFIG_PATH = resolve(appRoot, "servers", "config.yml");
+function getUserConfigDir(): string {
+  if (process.env.MCP_USER_CONFIG_DIR) {
+    return resolve(process.env.MCP_USER_CONFIG_DIR);
+  }
+
+  if (process.platform === "win32") {
+    const appData = process.env.APPDATA || resolve(os.homedir(), "AppData", "Roaming");
+    return resolve(appData, "nexus");
+  }
+
+  return resolve(os.homedir(), ".config", "nexus");
+}
+
+function getUserServersDir(baseDir = getUserConfigDir()): string {
+  if (process.env.MCP_USER_SERVERS_DIR) {
+    return resolve(process.env.MCP_USER_SERVERS_DIR);
+  }
+  return resolve(baseDir, "servers", "custom");
+}
+
+const USER_CONFIG_DIR = getUserConfigDir();
+const USER_SERVERS_DIR = getUserServersDir(USER_CONFIG_DIR);
+
+// Load optional user-level env file for secrets/tokens (does not override process.env)
+loadEnvFile({ path: resolve(USER_CONFIG_DIR, ".env"), override: false });
+
+const DEFAULT_CONFIG_PATH = resolve(appRoot, "servers", "default", "config.yml");
 
 const sourceConfigSchema = z.object({
   path: z.string(),
   category: z.string().optional(),
   optional: z.boolean().default(false)
+});
+
+const metaConfigSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional(),
+  authors: z.array(z.string()).default([]),
+  about: z.string().optional()
 });
 
 const envVarSchema = z.object({
@@ -58,14 +93,27 @@ const serverConfigSchema = z.object({
 const globalConfigSchema = z.object({
   sources: z
     .array(sourceConfigSchema)
-    .default([
-      { path: "./default", category: "official" },
-      { path: "./custom", category: "custom", optional: true }
-    ])
+    .default([]),
+  meta: metaConfigSchema.optional()
 });
 
 type SourceConfig = z.infer<typeof sourceConfigSchema>;
 type ServerConfig = z.infer<typeof serverConfigSchema>;
+type MetaConfig = z.infer<typeof metaConfigSchema>;
+
+function includeUserCustomSource(sources: SourceConfig[]): SourceConfig[] {
+  const userPath = USER_SERVERS_DIR;
+  const hasUserSource = sources.some((source) => resolveSourcePath(source, "") === resolve(userPath));
+  if (hasUserSource) return sources;
+  return [...sources, { path: userPath, category: "custom", optional: true }];
+}
+
+function includeRepoSource(sources: SourceConfig[], baseDir: string): SourceConfig[] {
+  const repoPath = resolve(baseDir, ".");
+  const hasRepoSource = sources.some((source) => resolveSourcePath(source, baseDir) === repoPath);
+  if (hasRepoSource) return sources;
+  return [{ path: ".", category: "official" }, ...sources];
+}
 
 function resolveConfigPath(): { configPath: string; configDir: string } {
   const configuredPath = process.env.MCP_SERVERS_CONFIG;
@@ -81,14 +129,20 @@ function readYamlFile(path: string): unknown {
   return YAML.parse(raw) ?? {};
 }
 
-function loadGlobalConfig(): { configDir: string; configPath: string; sources: SourceConfig[] } {
+function loadGlobalConfig(): {
+  configDir: string;
+  configPath: string;
+  sources: SourceConfig[];
+  meta?: MetaConfig;
+} {
   const { configPath, configDir } = resolveConfigPath();
 
   if (!fs.existsSync(configPath)) {
     console.log(
       `\x1B[90m[Config] No config.yml found at ${configPath}, using default sources.\x1B[0m`
     );
-    return { configDir, configPath, sources: globalConfigSchema.parse({}).sources };
+    const sourcesWithDefaults = includeUserCustomSource(includeRepoSource([], configDir));
+    return { configDir, configPath, sources: sourcesWithDefaults };
   }
 
   try {
@@ -97,16 +151,19 @@ function loadGlobalConfig(): { configDir: string; configPath: string; sources: S
       console.warn(
         `\x1B[93m[Config] Invalid config.yml at ${configPath}, falling back to defaults: ${parsed.error.message}\x1B[0m`
       );
-      return { configDir, configPath, sources: globalConfigSchema.parse({}).sources };
+      const sourcesWithDefaults = includeUserCustomSource(includeRepoSource([], configDir));
+      return { configDir, configPath, sources: sourcesWithDefaults };
     }
-    return { configDir, configPath, sources: parsed.data.sources };
+    const sourcesWithDefaults = includeUserCustomSource(includeRepoSource(parsed.data.sources, configDir));
+    return { configDir, configPath, sources: sourcesWithDefaults, meta: parsed.data.meta };
   } catch (error) {
     console.warn(
       `\x1B[93m[Config] Failed to read config.yml at ${configPath}, falling back to defaults: ${
         error instanceof Error ? error.message : String(error)
       }\x1B[0m`
     );
-    return { configDir, configPath, sources: globalConfigSchema.parse({}).sources };
+    const sourcesWithDefaults = includeUserCustomSource(includeRepoSource([], configDir));
+    return { configDir, configPath, sources: sourcesWithDefaults };
   }
 }
 
