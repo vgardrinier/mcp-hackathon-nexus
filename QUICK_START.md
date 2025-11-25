@@ -12,6 +12,7 @@ Copy `apps/mcp/.env.example` to `apps/mcp/.env` and set:
 Export tokens for the built-in servers before starting:
 - `GITHUB_TOKEN` for the GitHub STDIO server.
 - `NOTION_MCP_TOKEN` (secret_*) for the Notion HTTP server.
+- You can also store secrets in files and reference them via `valueFromFile` in YAML (paths resolve from `~/.config/nexus/` or `%APPDATA%/nexus/`).
 
 ## 2. Understand the file layout
 

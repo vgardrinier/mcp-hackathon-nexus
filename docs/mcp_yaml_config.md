@@ -53,7 +53,7 @@ Common optional fields:
   - `name` (string, optional; defaults to `key`)
   - `description` (string, optional)
   - `required` (bool, default `false`)
-  - `value` (string, optional) or `valueFromEnv` (env var name, optional)
+  - `value` (string, optional) or `valueFromEnv` (env var name, optional) or `valueFromFile` (string path, optional; relative paths resolve from user config dir)
 
 Transport configs (`config`):
 - STDIO:
@@ -74,6 +74,7 @@ Transport configs (`config`):
 
 ## Credentials and env resolution
 - `env[*].value` wins over `env[*].valueFromEnv`; missing values become `null`.
+- `valueFromFile` resolves a file (absolute or relative to the user config dir) and trims it.
 - `accessTokenFromEnv` pulls from process env; `valueFromEnv` does the same.
 - Optional user-level secrets file: `~/.config/nexus/.env` (Windows: `%APPDATA%/nexus/.env`). Loaded automatically (does **not** override existing env vars).
 - Servers requiring missing required env vars are skipped at registration time.

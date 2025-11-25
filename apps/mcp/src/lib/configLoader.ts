@@ -59,7 +59,8 @@ const envVarSchema = z.object({
   description: z.string().optional(),
   required: z.boolean().default(false),
   value: z.string().optional(),
-  valueFromEnv: z.string().optional()
+  valueFromEnv: z.string().optional(),
+  valueFromFile: z.string().optional()
 });
 
 const stdioConfigSchema = z.object({
@@ -173,6 +174,17 @@ function resolveEnvValue(envVar: z.infer<typeof envVarSchema>): string | null {
   }
   if (envVar.valueFromEnv) {
     return process.env[envVar.valueFromEnv] ?? null;
+  }
+  if (envVar.valueFromFile) {
+    try {
+      const filePath = isAbsolute(envVar.valueFromFile)
+        ? envVar.valueFromFile
+        : resolve(USER_CONFIG_DIR, envVar.valueFromFile);
+      if (!fs.existsSync(filePath)) return null;
+      return fs.readFileSync(filePath, "utf8").trim();
+    } catch {
+      return null;
+    }
   }
   return null;
 }
