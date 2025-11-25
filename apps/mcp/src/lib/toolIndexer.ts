@@ -199,15 +199,17 @@ export async function buildToolIndex(
  * Handles camelCase splitting like tool name extraction
  */
 export function normalizeQuery(query: string): string[] {
-  return query
-    .toLowerCase()
-    // Split camelCase: searchCode -> search code
-    .replace(/([A-Z])/g, " $1")
-    // Split on whitespace, underscore, dash, comma, period, parens
-    .split(/[\s_\-.,()]+/)
-    .map((w) => w.trim())
-    .filter((w) => w.length > 2)
-    .filter((w) => !STOPWORDS.has(w))
-    // Deduplicate
-    .filter((v, i, arr) => arr.indexOf(v) === i);
+  return (
+    query
+      // Split camelCase BEFORE lowercasing: searchCode -> search Code
+      .replace(/([A-Z])/g, " $1")
+      .toLowerCase()
+      // Split on whitespace, underscore, dash, comma, period, parens
+      .split(/[\s_\-.,()]+/)
+      .map((w) => w.trim())
+      .filter((w) => w.length > 2)
+      .filter((w) => !STOPWORDS.has(w))
+      // Deduplicate
+      .filter((v, i, arr) => arr.indexOf(v) === i)
+  );
 }

@@ -1,5 +1,6 @@
 import type { ToolIndex, ToolMetadata } from "./toolIndexer.js";
 import { normalizeQuery } from "./toolIndexer.js";
+import { expandQuery } from "./synonyms.js";
 
 export interface ToolRoutingRequest {
   userQuery: string;
@@ -56,24 +57,48 @@ export class ToolRouter {
     }
 
     // Multiple matches - check if top match is significantly better
-    const topScore = keywordMatches[0].score;
-    const secondScore = keywordMatches[1]?.score || 0;
+    const topMatch = keywordMatches[0];
+    const secondMatch = keywordMatches[1];
+    const topScore = topMatch.score;
+    const secondScore = secondMatch?.score || 0;
 
-    // If top match has 2x the score of second best, use it
-    if (topScore >= secondScore * 2) {
+    // High confidence if:
+    // 1. Top match has 2x the score of second best, OR
+    // 2. Top match has exact name match, OR
+    // 3. Top match has 50% more name keyword hits than second
+    const scoreRatio = secondScore > 0 ? topScore / secondScore : Infinity;
+    const nameHitAdvantage = topMatch.nameKeywordHits - (secondMatch?.nameKeywordHits || 0);
+
+    if (
+      topMatch.exactMatch ||
+      scoreRatio >= 2 ||
+      (topMatch.nameKeywordHits > 0 && nameHitAdvantage >= 1)
+    ) {
       return {
-        selectedTool: keywordMatches[0].namespacedName,
+        selectedTool: topMatch.namespacedName,
         confidence: "high",
-        reason: `Clear winner with score ${topScore} vs ${secondScore}`
+        reason: topMatch.exactMatch
+          ? `Exact name match (score: ${topScore})`
+          : scoreRatio >= 2
+          ? `Clear winner with score ${topScore} vs ${secondScore}`
+          : `Strong name keyword match (${topMatch.nameKeywordHits} hits vs ${secondMatch?.nameKeywordHits || 0})`
       };
     }
 
-    // Step C: Ambiguous - need LLM resolver (for now, return top match with medium confidence)
-    // TODO: Implement LLM resolver when needed
+    // Medium confidence if score is decent
+    if (topScore >= 3) {
+      return {
+        selectedTool: topMatch.namespacedName,
+        confidence: "medium",
+        reason: `Top match among ${keywordMatches.length} candidates (score: ${topScore})`
+      };
+    }
+
+    // Step C: Low confidence - might need LLM resolver
     return {
-      selectedTool: keywordMatches[0].namespacedName,
-      confidence: "medium",
-      reason: `Top match among ${keywordMatches.length} candidates (score: ${topScore})`
+      selectedTool: topMatch.namespacedName,
+      confidence: "low",
+      reason: `Weak match among ${keywordMatches.length} candidates (score: ${topScore})`
     };
   }
 
@@ -102,11 +127,14 @@ export class ToolRouter {
   private matchByKeywords(
     query: string
   ): Array<ToolMetadata & { score: number; nameKeywordHits: number; exactMatch: boolean }> {
-    const queryKeywords = normalizeQuery(query);
+    let queryKeywords = normalizeQuery(query);
 
     if (queryKeywords.length === 0) {
       return [];
     }
+
+    // Expand query with synonyms
+    queryKeywords = expandQuery(queryKeywords);
 
     // Score each tool based on keyword matches
     const scores = new Map<string, { score: number; nameKeywordHits: number; exactMatch: boolean }>();
