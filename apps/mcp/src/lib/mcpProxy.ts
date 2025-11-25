@@ -8,6 +8,7 @@ import { EndServer } from "./endServer/endServer.js";
 import type { EndServerData } from "./endServer/types.js";
 import { hasValidEnv, parseNamespacedToolName } from "./mcpUtils.js";
 import { loadConfiguredEndServers } from "./configLoader.js";
+import type { ToolRouter } from "./toolRouter.js";
 
 const SERVER_INFO = {
   name: "Nexus L2 MCP",
@@ -39,6 +40,7 @@ let namespaceCounter = 0;
 const endServers: Record<string, EndServer> = {};
 const endServersData: Record<string, EndServerData> = {};
 let pollingInterval: NodeJS.Timeout | null = null;
+let toolRouter: ToolRouter | null = null;
 
 function registerEndServer(endServerData: EndServerData): boolean {
   if (!hasValidEnv(endServerData)) {
@@ -136,8 +138,7 @@ const customTools: Tool[] = [
     description: "List the MCP servers the user has installed for this Nexus API key.",
     inputSchema: {
       type: "object",
-      properties: {},
-      additionalProperties: false
+      properties: {}
     }
   },
   {
@@ -145,8 +146,29 @@ const customTools: Tool[] = [
     description: "List basic connection status for installed MCP servers.",
     inputSchema: {
       type: "object",
-      properties: {},
-      additionalProperties: false
+      properties: {}
+    }
+  },
+  {
+    name: "auto_select_tool",
+    description: "Automatically selects and executes the best tool for a given natural language intent. Use this when you're unsure which specific tool to call.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        intent: {
+          type: "string",
+          description: "Natural language description of what you want to accomplish (e.g., 'search for code', 'get last pull requests')"
+        },
+        args: {
+          type: "object",
+          description: "Arguments to pass to the selected tool"
+        },
+        _intent: {
+          type: "string",
+          description: "Optional: Explicit tool name if you know which tool to use"
+        }
+      },
+      required: ["intent"]
     }
   }
 ];
@@ -191,7 +213,10 @@ const customToolExecutors: Record<string, () => Promise<{ content: unknown; isEr
         })),
         isError: false
       };
-    }
+    },
+  "auto_select_tool": async () => {
+    throw new Error("auto_select_tool requires arguments and special handling");
+  }
 };
 
 proxyMCPServer.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -252,8 +277,87 @@ proxyMCPServer.setRequestHandler(ListToolsRequestSchema, async () => {
 proxyMCPServer.setRequestHandler(CallToolRequestSchema, async (request) => {
   console.log(`\x1B[94m[Tool Call] 🔧 Client requested: ${request.params.name}\x1B[0m`);
 
+  // Special handling for auto_select_tool
+  if (request.params.name === "auto_select_tool") {
+    if (!toolRouter) {
+      return {
+        content: [{ type: "text", text: "Tool router not initialized. Server may be starting up." }],
+        isError: true
+      };
+    }
+
+    try {
+      const intent = request.params.arguments?.intent as string;
+      const args = request.params.arguments?.args as Record<string, unknown> | undefined;
+      const explicitIntent = request.params.arguments?._intent as string | undefined;
+
+      if (!intent) {
+        return {
+          content: [{ type: "text", text: "Missing required argument: intent" }],
+          isError: true
+        };
+      }
+
+      console.log(`\x1B[90m[Auto-Select] Routing query: "${intent}"\x1B[0m`);
+      const result = await toolRouter.route({ userQuery: intent, _intent: explicitIntent });
+
+      console.log(`\x1B[92m[Auto-Select] Selected: ${result.selectedTool} (confidence: ${result.confidence})\x1B[0m`);
+      console.log(`\x1B[90m[Auto-Select] Reason: ${result.reason}\x1B[0m`);
+
+      // Now execute the selected tool
+      if (result.selectedTool.endsWith("_nxs")) {
+        const { nexusId, toolName } = parseNamespacedToolName(result.selectedTool);
+        const endServerId = namespaceToServerId[nexusId];
+
+        console.log(`\x1B[90m[Auto-Select] Executing ${toolName} on ${endServers[endServerId].name}\x1B[0m`);
+
+        // If no args provided, try to extract from intent (basic heuristic)
+        let finalArgs = args || {};
+        if (!args || Object.keys(args).length === 0) {
+          // Try to extract search query from intent
+          if (toolName.includes('search')) {
+            // Extract meaningful keywords from intent
+            const keywords = intent.split(' ').filter(w =>
+              !['find', 'my', 'the', 'a', 'an', 'about', 'for', 'in', 'on', 'with'].includes(w.toLowerCase())
+            );
+            finalArgs = { q: keywords.join(' ') };
+            console.log(`\x1B[90m[Auto-Select] Extracted args from intent: ${JSON.stringify(finalArgs)}\x1B[0m`);
+          }
+        }
+
+        const toolResult = await endServers[endServerId].callTool(toolName, {
+          ...request.params,
+          arguments: finalArgs
+        });
+
+        // Add routing metadata to response
+        return {
+          ...toolResult,
+          content: [
+            {
+              type: "text",
+              text: `[Auto-selected: ${result.selectedTool} (${result.confidence} confidence)]\n${result.reason}\n\n`
+            },
+            ...(Array.isArray(toolResult.content) ? toolResult.content : [toolResult.content])
+          ]
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: `Selected tool ${result.selectedTool} but it's not a recognized end server tool` }],
+        isError: true
+      };
+    } catch (error) {
+      console.error(`\x1B[91m[Auto-Select] Error: ${error instanceof Error ? error.message : String(error)}\x1B[0m`);
+      return {
+        content: [{ type: "text", text: `Error in auto_select_tool: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true
+      };
+    }
+  }
+
   const customToolExecutor = customToolExecutors[request.params.name];
-  if (customToolExecutor) {
+  if (customToolExecutor && request.params.name !== "auto_select_tool") {
     console.log(`\x1B[90m[Tool Call] Executing custom tool: ${request.params.name}\x1B[0m`);
     const result = await customToolExecutor();
     console.log(`\x1B[92m[Tool Call] ✅ Custom tool completed: ${request.params.name}\x1B[0m`);
@@ -400,6 +504,19 @@ export async function initializeServer() {
 
   // Start polling for config changes every 30 seconds
   startPolling();
+}
+
+export function setToolRouter(router: ToolRouter) {
+  toolRouter = router;
+  console.log("\x1B[90m[Router] Tool router initialized\x1B[0m");
+}
+
+export function getEndServers(): Record<string, EndServer> {
+  return endServers;
+}
+
+export function getServerIdToNamespace(): Record<string, string> {
+  return serverIdToNamespace;
 }
 
 export function startPolling() {

@@ -9,7 +9,9 @@ import {
   InvalidSessionIdResponseSkeleton
 } from "./lib/httpSkeleton.js";
 import { verifyBearerToken } from "./lib/httpAuth.js";
-import { cleanup, initializeServer, proxyMCPServer } from "./lib/mcpProxy.js";
+import { cleanup, initializeServer, proxyMCPServer, setToolRouter, getEndServers, getServerIdToNamespace } from "./lib/mcpProxy.js";
+import { buildToolIndex } from "./lib/toolIndexer.js";
+import { ToolRouter } from "./lib/toolRouter.js";
 
 console.log("Starting Nexus L2 MCP HTTP server...");
 
@@ -188,9 +190,19 @@ async function main() {
       );
     });
 
-    initializeServer().catch((error) => {
-      console.error("\x1B[91mError initializing end servers:", error, "\x1B[0m");
-    });
+    // Initialize end servers first
+    await initializeServer();
+
+    // Build tool index from registered end servers
+    const endServers = getEndServers();
+    const serverIdToNamespace = getServerIdToNamespace();
+    const toolIndex = await buildToolIndex(endServers, serverIdToNamespace);
+
+    // Initialize and set the tool router
+    const toolRouter = new ToolRouter(toolIndex);
+    setToolRouter(toolRouter);
+
+    console.log("\x1B[92m[Init] ✅ Tool router ready for intelligent routing\x1B[0m");
   } catch (error) {
     console.error("\nFatal error starting HTTP server:", error);
     process.exit(1);
