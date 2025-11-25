@@ -24,7 +24,6 @@ module.exports = {
       max_memory_restart: "500M",
       env: {
         NODE_ENV: "development",
-        API_KEY: "e51d31b5-51e4-4d04-b3d0-73c8fed5c961",
         HTTP_SERVER_PORT: "3001"
       }
     }

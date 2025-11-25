@@ -3,7 +3,6 @@ export type TransportKind = "stdio" | "streamable-http";
 export interface UserRow {
   id: string;
   email: string | null;
-  api_key: string;
 }
 
 export interface McpServerRow {

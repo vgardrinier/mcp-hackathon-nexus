@@ -133,7 +133,7 @@ function hasServerConfigChanged(existing: EndServerData, incoming: EndServerData
 const customTools: Tool[] = [
   {
     name: "list-end-servers",
-    description: "List the MCP servers the user has installed for this Nexus API key.",
+    description: "List the MCP servers installed in the local Nexus state.",
     inputSchema: {
       type: "object",
       properties: {},

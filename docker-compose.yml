@@ -17,7 +17,7 @@ services:
       - .:/app
       - node_modules:/app/node_modules
       - pnpm-store:/root/.local/share/pnpm
-    restart: unless-stopped
+    restart: "no"
 
   mcp:
     build:
@@ -37,7 +37,7 @@ services:
       - ~/.config/nexus:/root/.config/nexus
     depends_on:
       - dashboard
-    restart: unless-stopped
+    restart: "no"
 
 volumes:
   node_modules:
