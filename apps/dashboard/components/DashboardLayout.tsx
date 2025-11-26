@@ -6,7 +6,10 @@ import Link from "next/link";
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  const navItems = [{ href: "/dashboard/servers", label: "MCP Servers", icon: "MCP" }];
+  const navItems = [
+    { href: "/dashboard/servers", label: "MCP Servers", icon: "🔌" },
+    { href: "/dashboard/clients", label: "MCP Clients", icon: "🤖" }
+  ];
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
