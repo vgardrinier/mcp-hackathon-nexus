@@ -7,36 +7,56 @@
 
 export const SYNONYMS: Record<string, string[]> = {
   // GitHub/Git terms (include uppercase variants)
-  pr: ["pull", "request", "pull_request", "pullrequest"],
-  PR: ["pull", "request", "pull_request", "pullrequest"],
-  "pull request": ["pr", "PR", "merge", "review", "pull_request"],
-  "merge request": ["pr", "PR", "pull", "request", "pull_request"],
-  review: ["pr", "PR", "pull", "request", "code", "review"],
-  commit: ["change", "diff", "patch"],
-  repo: ["repository", "project"],
-  repository: ["repo", "project"],
+  pr: ["pull", "request", "pull_request", "pullrequest", "review", "merge"],
+  PR: ["pull", "request", "pull_request", "pullrequest", "review", "merge"],
+  "pull request": ["pr", "PR", "merge", "review", "pull_request", "code", "changes"],
+  "merge request": ["pr", "PR", "pull", "request", "pull_request", "review"],
+  review: ["pr", "PR", "pull", "request", "code", "review", "pull_request", "changes", "diff"],
+  "code review": ["pr", "PR", "pull", "request", "review", "pull_request", "changes"],
+  commit: ["change", "diff", "patch", "update"],
+  repo: ["repository", "project", "codebase"],
+  repos: ["repository", "repositories", "project", "projects"],
+  repository: ["repo", "project", "codebase"],
+  repositories: ["repo", "repos", "projects"],
+
+  // Code-related terms
+  code: ["file", "source", "script", "program"],
+  file: ["document", "code", "content"],
+  contents: ["content", "file", "data"],
 
   // Issue tracking
-  ticket: ["issue", "task", "bug"],
-  issue: ["ticket", "task", "bug", "problem"],
-  task: ["issue", "ticket", "item", "todo"],
-  bug: ["issue", "problem", "error"],
+  ticket: ["issue", "task", "bug", "item"],
+  issue: ["ticket", "task", "bug", "problem", "item"],
+  issues: ["tickets", "tasks", "bugs", "items"],
+  task: ["issue", "ticket", "item", "todo", "work"],
+  bug: ["issue", "problem", "error", "defect"],
 
   // Database terms
-  table: ["relation", "collection"],
-  query: ["select", "search", "find"],
-  insert: ["add", "create", "new"],
-  update: ["modify", "change", "edit"],
-  delete: ["remove", "drop"],
-  row: ["record", "entry", "item"],
+  table: ["relation", "collection", "dataset"],
+  tables: ["relations", "collections", "datasets"],
+  database: ["db", "data", "store", "storage"],
+  db: ["database", "data"],
+  query: ["select", "search", "find", "fetch"],
+  insert: ["add", "create", "new", "write"],
+  row: ["record", "entry", "item", "data"],
+
+  // Project/workspace terms
+  project: ["workspace", "repo", "repository", "board"],
+  workspace: ["project", "organization", "team"],
 
   // General actions
-  create: ["add", "new", "make"],
-  search: ["find", "query", "look", "lookup"],
-  list: ["show", "display", "get"],
-  get: ["fetch", "retrieve", "show"],
-  update: ["edit", "modify", "change"],
-  delete: ["remove", "destroy"]
+  create: ["add", "new", "make", "insert", "build"],
+  add: ["create", "new", "insert", "make"],
+  search: ["find", "query", "look", "lookup", "locate"],
+  find: ["search", "query", "look", "lookup", "locate", "get"],
+  list: ["show", "display", "get", "fetch", "retrieve"],
+  show: ["list", "display", "get", "view"],
+  get: ["fetch", "retrieve", "show", "find", "list"],
+  fetch: ["get", "retrieve", "load", "pull"],
+  update: ["edit", "modify", "change", "set"],
+  edit: ["update", "modify", "change"],
+  delete: ["remove", "destroy", "drop", "erase"],
+  remove: ["delete", "destroy", "drop"]
 };
 
 /**
