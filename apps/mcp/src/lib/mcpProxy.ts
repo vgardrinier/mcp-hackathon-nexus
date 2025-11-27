@@ -156,7 +156,7 @@ const customTools: Tool[] = [
   },
   {
     name: "nexus_init",
-    description: "**PRIMARY TOOL**: Use this to access GitHub, Linear, Supabase, and all other integrated services. Nexus automatically routes your request to the correct tool. Pass your intent as natural language (e.g., 'list my supabase projects', 'get github PRs', 'show linear issues').",
+    description: "**PRIMARY TOOL**: Use this to access GitHub, Linear, Supabase, Playwright, and all other integrated services. Nexus automatically routes your request to the correct tool. Pass your intent as natural language (e.g., 'list my supabase projects', 'take a screenshot of example.com', 'get github PRs', 'automate browser to fill a form').",
     inputSchema: {
       type: "object",
       properties: {
