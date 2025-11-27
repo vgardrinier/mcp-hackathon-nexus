@@ -1,49 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth/AuthProvider";
 import Link from "next/link";
 
 export default function ClaudeClientPage() {
-  const { user, loading: authLoading } = useAuth();
-  const router = useRouter();
-  const [apiKey, setApiKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login");
-      return;
-    }
-
-    if (user) {
-      fetch("/api/user/api-key")
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.apiKey) {
-            setApiKey(data.apiKey);
-          }
-        })
-        .catch((error) => {
-          console.error("Failed to fetch API key:", error);
-        });
-    }
-  }, [user, authLoading, router]);
+    setCopied(false);
+  }, []);
 
   const getConfig = () => {
-    if (!apiKey) return "";
-
     return JSON.stringify(
       {
         mcpServers: {
           nexus: {
             command: "node",
             args: ["apps/mcp/dist/stdio.js"],
-            env: {
-              API_KEY: apiKey,
-              DASHBOARD_URL: typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"
-            }
+            env: {}
           }
         }
       },
@@ -62,20 +36,10 @@ export default function ClaudeClientPage() {
 
   const handleCopy = async () => {
     const config = getConfig();
-    if (config) {
-      await navigator.clipboard.writeText(config);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+    await navigator.clipboard.writeText(config);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
-
-  if (authLoading) {
-    return (
-      <div style={{ padding: "2rem" }}>
-        <p>Loading...</p>
-      </div>
-    );
-  }
 
   return (
     <div style={{ maxWidth: "1000px", margin: "2rem auto", padding: "2rem" }}>
@@ -92,36 +56,21 @@ export default function ClaudeClientPage() {
         </p>
       </div>
 
-      {!apiKey && (
-        <div
-          style={{
-            padding: "1rem",
-            backgroundColor: "#fff3cd",
-            color: "#856404",
-            borderRadius: "4px",
-            marginBottom: "2rem"
-          }}
-        >
-          Loading API key...
-        </div>
-      )}
-
       <div style={{ marginBottom: "2rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
           <h2 style={{ fontSize: "1.2rem", fontWeight: 600 }}>Configuration</h2>
           <button
             onClick={handleCopy}
-            disabled={!apiKey}
             style={{
               padding: "0.5rem 1rem",
               backgroundColor: copied ? "#28a745" : "#0070f3",
               color: "white",
               border: "none",
               borderRadius: "4px",
-              cursor: apiKey ? "pointer" : "not-allowed",
+              cursor: "pointer",
               fontSize: "0.9rem",
               fontWeight: 500,
-              opacity: apiKey ? 1 : 0.6
+              opacity: 1
             }}
           >
             {copied ? "Copied!" : "Copy Config"}

@@ -17,7 +17,7 @@ services:
       - .:/app
       - node_modules:/app/node_modules
       - pnpm-store:/root/.local/share/pnpm
-    restart: unless-stopped
+    restart: "no"
 
   mcp:
     build:
@@ -28,17 +28,16 @@ services:
       && pnpm dev:mcp:http"
     env_file:
       - ./apps/mcp/.env
-    environment:
-      DASHBOARD_URL: http://dashboard:3000
     ports:
       - "3001:3001"
     volumes:
       - .:/app
       - node_modules:/app/node_modules
       - pnpm-store:/root/.local/share/pnpm
+      - ~/.config/nexus:/root/.config/nexus
     depends_on:
       - dashboard
-    restart: unless-stopped
+    restart: "no"
 
 volumes:
   node_modules:

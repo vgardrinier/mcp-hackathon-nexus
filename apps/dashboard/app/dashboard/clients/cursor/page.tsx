@@ -1,52 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth/AuthProvider";
 import Link from "next/link";
 
 export default function CursorClientPage() {
-  const { user, loading: authLoading } = useAuth();
-  const router = useRouter();
-  const [apiKey, setApiKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"http" | "stdio">("http");
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login");
-      return;
-    }
-
-    if (user) {
-      fetch("/api/user/api-key")
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.apiKey) {
-            setApiKey(data.apiKey);
-          }
-        })
-        .catch((error) => {
-          console.error("Failed to fetch API key:", error);
-        });
-    }
-  }, [user, authLoading, router]);
+    setCopied(null);
+  }, []);
 
   const mcpServerUrl = typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}:3001` : "http://localhost:3001";
 
   const getConfig = () => {
-    if (!apiKey) return "";
-
     if (activeTab === "http") {
       // Cursor format: mcpServers object with url and headers
       return JSON.stringify(
         {
           mcpServers: {
             nexus: {
-              url: `${mcpServerUrl}/mcp`,
-              headers: {
-                Authorization: `Bearer ${apiKey}`
-              }
+              url: `${mcpServerUrl}/mcp`
             }
           }
         },
@@ -61,10 +35,7 @@ export default function CursorClientPage() {
             nexus: {
               command: "node",
               args: ["apps/mcp/dist/stdio.js"],
-              env: {
-                API_KEY: apiKey,
-                DASHBOARD_URL: typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"
-              }
+              env: {}
             }
           }
         },
@@ -84,20 +55,10 @@ export default function CursorClientPage() {
 
   const handleCopy = async () => {
     const config = getConfig();
-    if (config) {
-      await navigator.clipboard.writeText(config);
-      setCopied(activeTab);
-      setTimeout(() => setCopied(null), 2000);
-    }
+    await navigator.clipboard.writeText(config);
+    setCopied(activeTab);
+    setTimeout(() => setCopied(null), 2000);
   };
-
-  if (authLoading) {
-    return (
-      <div style={{ padding: "2rem" }}>
-        <p>Loading...</p>
-      </div>
-    );
-  }
 
   return (
     <div style={{ maxWidth: "1000px", margin: "2rem auto", padding: "2rem" }}>
@@ -113,20 +74,6 @@ export default function CursorClientPage() {
           Choose your connection method and add the configuration to Cursor's MCP settings.
         </p>
       </div>
-
-      {!apiKey && (
-        <div
-          style={{
-            padding: "1rem",
-            backgroundColor: "#fff3cd",
-            color: "#856404",
-            borderRadius: "4px",
-            marginBottom: "2rem"
-          }}
-        >
-          Loading API key...
-        </div>
-      )}
 
       <div style={{ marginBottom: "2rem" }}>
         <div style={{ display: "flex", gap: "0.5rem", borderBottom: "1px solid #e0e0e0" }}>
@@ -168,17 +115,16 @@ export default function CursorClientPage() {
           <h2 style={{ fontSize: "1.2rem", fontWeight: 600 }}>Configuration</h2>
           <button
             onClick={handleCopy}
-            disabled={!apiKey}
             style={{
               padding: "0.5rem 1rem",
               backgroundColor: copied === activeTab ? "#28a745" : "#0070f3",
               color: "white",
               border: "none",
               borderRadius: "4px",
-              cursor: apiKey ? "pointer" : "not-allowed",
+              cursor: "pointer",
               fontSize: "0.9rem",
               fontWeight: 500,
-              opacity: apiKey ? 1 : 0.6
+              opacity: 1
             }}
           >
             {copied === activeTab ? "Copied!" : "Copy Config"}

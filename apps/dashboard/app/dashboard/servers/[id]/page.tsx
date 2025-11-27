@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { useAuth } from "@/lib/auth/AuthProvider";
 import Link from "next/link";
 
 interface EnvVar {
@@ -26,7 +25,6 @@ interface Server {
 }
 
 export default function ServerDetailPage() {
-  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -102,50 +100,39 @@ export default function ServerDetailPage() {
   };
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login");
-      return;
-    }
+    const oauthParam = searchParams.get("oauth");
+    const oauthError = searchParams.get("oauth_error");
+    const workspace = searchParams.get("workspace");
 
-    if (user) {
-      // Check for OAuth callback messages
-      const oauthParam = searchParams.get("oauth");
-      const oauthError = searchParams.get("oauth_error");
-      const workspace = searchParams.get("workspace");
-
-      if (oauthParam === "success") {
-        setOauthMessage({
-          type: "success",
-          text: workspace
-            ? `Successfully connected to Notion workspace: ${workspace}`
-            : "Successfully authenticated with Notion!"
-        });
-        // Clear URL params
-        router.replace(`/dashboard/servers/${serverId}`, { scroll: false });
-        // Refresh server data to show authenticated status
-        fetchServerData();
-      } else if (oauthError) {
-        const errorMessages: Record<string, string> = {
-          missing_params: "OAuth callback missing required parameters",
-          invalid_state: "OAuth state verification failed",
-          unsupported: "OAuth not supported for this server",
-          not_configured: "OAuth not configured. Please contact support",
-          token_exchange_failed: "Failed to exchange authorization code for tokens",
-          no_token: "No access token received from Notion",
-          storage_failed: "Failed to store authentication tokens",
-          internal_error: "An internal error occurred during authentication"
-        };
-        setOauthMessage({
-          type: "error",
-          text: errorMessages[oauthError] || `Authentication failed: ${oauthError}`
-        });
-        // Clear URL params
-        router.replace(`/dashboard/servers/${serverId}`, { scroll: false });
-      } else {
-        fetchServerData();
-      }
+    if (oauthParam === "success") {
+      setOauthMessage({
+        type: "success",
+        text: workspace
+          ? `Successfully connected to Notion workspace: ${workspace}`
+          : "Successfully authenticated with Notion!"
+      });
+      router.replace(`/dashboard/servers/${serverId}`, { scroll: false });
+      fetchServerData();
+    } else if (oauthError) {
+      const errorMessages: Record<string, string> = {
+        missing_params: "OAuth callback missing required parameters",
+        invalid_state: "OAuth state verification failed",
+        unsupported: "OAuth not supported for this server",
+        not_configured: "OAuth not configured. Please contact support",
+        token_exchange_failed: "Failed to exchange authorization code for tokens",
+        no_token: "No access token received from Notion",
+        storage_failed: "Failed to store authentication tokens",
+        internal_error: "An internal error occurred during authentication"
+      };
+      setOauthMessage({
+        type: "error",
+        text: errorMessages[oauthError] || `Authentication failed: ${oauthError}`
+      });
+      router.replace(`/dashboard/servers/${serverId}`, { scroll: false });
+    } else {
+      fetchServerData();
     }
-  }, [user, authLoading, router, serverId, searchParams]);
+  }, [router, serverId, searchParams]);
 
   const handleSaveEnvVars = async () => {
     setSaving(true);
