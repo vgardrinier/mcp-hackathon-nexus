@@ -77,16 +77,68 @@ All processing happens locally—zero cloud dependencies.
 ## Management
 
 **Dashboard**: http://localhost:3000
-**Logs**: `docker compose logs -f`
-**Stop**: `docker compose down`
-**Restart**: `docker compose restart`
 
-## Uninstall
+### Nexus CLI
 
+After installation, use the `nexus` command to manage your local setup:
+
+```bash
+nexus logs           # View activity logs (what data was read/written)
+nexus logs -f        # Follow activity in real-time
+nexus status         # Check service status
+nexus restart        # Restart services
+nexus stop / start   # Stop or start services
+nexus update         # Pull latest changes
+nexus help           # Show all commands
+```
+
+### Activity Logs
+
+The `nexus logs` command shows a human-readable audit trail of all tool calls:
+
+```bash
+$ nexus logs
+
+[10:23:45] 🔍 GitHub: search repositories
+   ├─ query: "react hooks"
+   └─ ✓ found 150 repositories
+      (245ms)
+
+[10:24:12] 📖 Linear: list issues
+   └─ ✓ found 23 issues
+
+[10:24:30] ✍️  GitHub: create issue
+   ├─ repo: my-app
+   └─ ✓ created with id: #142
+```
+
+This works generically for **any MCP server** you add - no server-specific code needed.
+
+### Docker Logs
+
+For raw service logs:
+- `docker compose logs -f`
+- `docker compose logs mcp` - MCP server logs only
+- `docker compose logs dashboard` - Dashboard logs only
+
+## Uninstall & Reinstall
+
+**To completely remove Nexus:**
+```bash
+nexus uninstall
+```
+
+**To reinstall (after uninstall or if installation failed):**
+```bash
+curl -sL https://raw.githubusercontent.com/vgardrinier/mcp-hackathon-nexus/master/install.sh | bash
+```
+
+**Manual uninstall:**
 ```bash
 cd ~/.nexus/repo
 docker compose down -v
 rm -rf ~/.nexus ~/.config/nexus
+rm /usr/local/bin/nexus  # or ~/.local/bin/nexus
 ```
 
 Then remove the Cursor MCP config from Settings → Features → Model Context Protocol.
