@@ -1,56 +1,33 @@
 import { NextResponse } from "next/server";
 import {
-  getAuthToken,
-  getEnvVarDefs,
-  getEnvVarValues,
-  getInstalledServerIds,
-  getLocalUser,
-  listServers
-} from "@/lib/localData";
+  listAvailableServers,
+  isServerConfigured,
+  getResolvedEnvVars
+} from "@/lib/yamlConfig";
 
 export async function GET() {
   try {
-    const user = getLocalUser();
-    const servers = listServers();
-    const installedServerIds = getInstalledServerIds(user.id);
-    const userEnvVarValues = new Map(
-      servers.flatMap((server) =>
-        getEnvVarValues(user.id, server.id).map((v) => [v.environment_var_id, v.value])
-      )
-    );
+    const servers = listAvailableServers();
 
     const result = servers.map((server) => {
-      const installed = installedServerIds.has(server.id);
-      const authToken = getAuthToken(user.id, server.id);
-      const envVarDefs = getEnvVarDefs(server.id);
+      const configured = isServerConfigured(server);
+      const resolvedEnvVars = getResolvedEnvVars(server);
 
-      let configured = false;
-      if (installed) {
-        if (server.transport === "stdio") {
-          const requiredEnvVarIds = envVarDefs.filter((v) => v.required).map((v) => v.id);
-          configured =
-            requiredEnvVarIds.length === 0 ||
-            requiredEnvVarIds.every((id) => {
-              const value = userEnvVarValues.get(id);
-              return value != null && value.toString().trim() !== "";
-            });
-        } else if (server.transport === "streamable-http") {
-          configured = server.requires_auth ? Boolean(authToken) : true;
-        } else {
-          configured = true;
-        }
-      }
+      // Check if authenticated (has access token or all env vars filled)
+      const authenticated = server.config.transport === "streamable-http"
+        ? Boolean(server.accessToken || server.accessTokenFromEnv)
+        : configured;
 
       return {
         id: server.id,
         name: server.name,
         description: server.description,
-        transport: server.transport,
-        sourceUrl: server.source_url,
-        logoUrl: server.logo_url,
-        requiresAuth: server.requires_auth,
-        installed,
-        authenticated: Boolean(authToken),
+        transport: server.config.transport,
+        sourceUrl: server.sourceUrl,
+        logoUrl: server.logoUrl,
+        requiresAuth: server.requiresAuth,
+        installed: true, // All servers in ~/.config/nexus are "installed"
+        authenticated,
         configured
       };
     });
@@ -61,4 +38,3 @@ export async function GET() {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-

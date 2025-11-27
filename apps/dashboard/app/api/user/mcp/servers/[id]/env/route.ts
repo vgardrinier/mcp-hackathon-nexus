@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { getEnvVarDefs, getLocalUser, upsertEnvVarValues } from "@/lib/localData";
+import { getServerConfig, updateServerEnvVars } from "@/lib/yamlConfig";
 
 export async function POST(
   req: Request,
   context: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const userId = getLocalUser().id;
     const params = context.params;
     const resolvedParams = params instanceof Promise ? await params : params;
     const serverId = resolvedParams.id;
@@ -20,19 +19,21 @@ export async function POST(
       return NextResponse.json({ error: "Invalid envVars" }, { status: 400 });
     }
 
-    const defs = getEnvVarDefs(serverId);
-    const updates: Record<string, string | null> = {};
-    defs.forEach((def) => {
-      if (envVars[def.key] !== undefined) {
-        updates[def.key] = envVars[def.key] || null;
-      }
-    });
+    const server = getServerConfig(serverId);
+    if (!server) {
+      return NextResponse.json({ error: "Server not found" }, { status: 404 });
+    }
 
-    upsertEnvVarValues(userId, serverId, updates);
+    // Update env vars in YAML
+    const success = updateServerEnvVars(serverId, envVars);
+
+    if (!success) {
+      return NextResponse.json({ error: "Failed to update env vars" }, { status: 500 });
+    }
+
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
     console.error("Error in POST /api/user/mcp/servers/[id]/env:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-

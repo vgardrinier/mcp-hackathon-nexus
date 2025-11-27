@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { getEnvVarDefs, getEnvVarValues, getLocalUser } from "@/lib/localData";
+import { getServerConfig, getResolvedEnvVars } from "@/lib/yamlConfig";
 
 export async function GET(
   _req: Request,
   context: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const userId = getLocalUser().id;
     const params = context.params;
     const resolvedParams = params instanceof Promise ? await params : params;
     const serverId = resolvedParams.id;
@@ -15,17 +14,21 @@ export async function GET(
       return NextResponse.json({ error: "Missing server ID" }, { status: 400 });
     }
 
-    const envVarDefs = getEnvVarDefs(serverId);
-    const userValues = getEnvVarValues(userId, serverId);
-    const valuesMap = new Map(userValues.map((v) => [v.environment_var_id, v.value]));
+    const server = getServerConfig(serverId);
+    if (!server) {
+      return NextResponse.json({ error: "Server not found" }, { status: 404 });
+    }
 
-    const envVars = envVarDefs.map((def) => ({
-      id: def.id,
-      name: def.name,
-      key: def.key,
-      description: def.description,
-      required: def.required,
-      value: valuesMap.get(def.id) || null
+    const resolvedValues = getResolvedEnvVars(server);
+
+    // Transform to match expected format
+    const envVars = (server.env || []).map((envVar) => ({
+      id: `${serverId}-${envVar.key}`,
+      name: envVar.name || envVar.key,
+      key: envVar.key,
+      description: envVar.description || null,
+      required: envVar.required || false,
+      value: resolvedValues[envVar.key] || null
     }));
 
     return NextResponse.json({ envVars }, { status: 200 });
@@ -34,4 +37,3 @@ export async function GET(
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-

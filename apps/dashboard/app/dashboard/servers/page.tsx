@@ -59,68 +59,8 @@ export default function ServersPage() {
     }, delay);
   }, []);
 
-  const handleInstall = async (serverId: string) => {
-    try {
-      const res = await fetch(`/api/user/mcp/servers/${serverId}`, { 
-        method: "POST",
-        credentials: "include"
-      });
-      const data = await res.json();
-      if (res.ok) {
-        // Refresh servers list with cache-busting
-        const refreshed = await fetch("/api/user/mcp/servers", {
-          credentials: "include",
-          cache: "no-store",
-          headers: {
-            "Cache-Control": "no-cache"
-          }
-        }).then((r) => r.json());
-        if (Array.isArray(refreshed)) {
-          setServers(refreshed);
-        }
-      } else {
-        console.error("Failed to install server:", data);
-        alert(`Failed to install server: ${data.error || "Unknown error"}`);
-      }
-    } catch (error) {
-      console.error("Error installing server:", error);
-      alert("Failed to install server");
-    }
-  };
-
-  const handleUninstall = async (serverId: string) => {
-    if (!confirm("Are you sure you want to uninstall this server? This will remove all configuration and authentication data.")) {
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/user/mcp/servers/${serverId}`, { 
-        method: "DELETE",
-        credentials: "include",
-        cache: "no-store"
-      });
-      const data = await res.json();
-      if (res.ok) {
-        // Refresh servers list with cache-busting
-        const refreshed = await fetch("/api/user/mcp/servers", {
-          credentials: "include",
-          cache: "no-store",
-          headers: {
-            "Cache-Control": "no-cache"
-          }
-        }).then((r) => r.json());
-        if (Array.isArray(refreshed)) {
-          setServers(refreshed);
-        }
-      } else {
-        console.error("Failed to uninstall server:", data);
-        alert(`Failed to uninstall server: ${data.error || "Unknown error"}`);
-      }
-    } catch (error) {
-      console.error("Error uninstalling server:", error);
-      alert("Failed to uninstall server");
-    }
-  };
+  // Note: Install/uninstall removed - all servers in ~/.config/nexus are always available
+  // Users just configure them to enable/disable
 
   if (loading) {
     return (
@@ -131,13 +71,10 @@ export default function ServersPage() {
   }
 
   const getStatusText = (server: Server) => {
-    if (!server.installed) return "disconnected";
     if (!server.configured) {
-      if (server.transport === "stdio") return "configuration required";
-      if (server.requiresAuth && !server.authenticated) return "auth required";
-      return "configuration required";
+      return "needs configuration";
     }
-    return "connected";
+    return "ready";
   };
 
   const getServerLogo = (serverId: string) => {
@@ -203,100 +140,45 @@ export default function ServersPage() {
             </p>
 
             <div style={{ display: "flex", gap: "0.5rem" }}>
-              {server.installed ? (
-                <>
-                  {server.configured ? (
-                    <>
-                      <Link
-                        href={`/dashboard/servers/${server.id}`}
-                        style={{
-                          flex: 1,
-                          padding: "0.75rem",
-                          backgroundColor: "#28a745",
-                          color: "white",
-                          textDecoration: "none",
-                          borderRadius: "4px",
-                          fontSize: "0.9rem",
-                          fontWeight: 500,
-                          textAlign: "center",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "0.5rem"
-                        }}
-                      >
-                        <span>✓</span>
-                        <span>Connected</span>
-                      </Link>
-                      <button
-                        onClick={() => handleUninstall(server.id)}
-                        style={{
-                          padding: "0.75rem 1rem",
-                          backgroundColor: "#dc3545",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          fontSize: "0.9rem",
-                          fontWeight: 500
-                        }}
-                      >
-                        Uninstall
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <Link
-                        href={`/dashboard/servers/${server.id}`}
-                        style={{
-                          flex: 1,
-                          padding: "0.75rem",
-                          backgroundColor: "#0070f3",
-                          color: "white",
-                          textDecoration: "none",
-                          borderRadius: "4px",
-                          fontSize: "0.9rem",
-                          fontWeight: 500,
-                          textAlign: "center"
-                        }}
-                      >
-                        Configure
-                      </Link>
-                      <button
-                        onClick={() => handleUninstall(server.id)}
-                        style={{
-                          padding: "0.75rem 1rem",
-                          backgroundColor: "#dc3545",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          fontSize: "0.9rem",
-                          fontWeight: 500
-                        }}
-                      >
-                        Uninstall
-                      </button>
-                    </>
-                  )}
-                </>
+              {server.configured ? (
+                <Link
+                  href={`/dashboard/servers/${server.id}`}
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    backgroundColor: "#28a745",
+                    color: "white",
+                    textDecoration: "none",
+                    borderRadius: "4px",
+                    fontSize: "0.9rem",
+                    fontWeight: 500,
+                    textAlign: "center",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.5rem"
+                  }}
+                >
+                  <span>✓</span>
+                  <span>Ready</span>
+                </Link>
               ) : (
-                <button
-                  onClick={() => handleInstall(server.id)}
+                <Link
+                  href={`/dashboard/servers/${server.id}`}
                   style={{
                     width: "100%",
                     padding: "0.75rem",
                     backgroundColor: "#0070f3",
                     color: "white",
-                    border: "none",
+                    textDecoration: "none",
                     borderRadius: "4px",
-                    cursor: "pointer",
                     fontSize: "0.9rem",
-                    fontWeight: 500
+                    fontWeight: 500,
+                    textAlign: "center"
                   }}
                 >
-                  Connect
-                </button>
+                  Configure
+                </Link>
               )}
             </div>
           </div>
