@@ -1,11 +1,14 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { User } from "@supabase/supabase-js";
-import { supabase } from "../supabase/client";
+
+type LocalUser = {
+  id: string;
+  email: string | null;
+};
 
 interface AuthContextType {
-  user: User | null;
+  user: LocalUser | null;
   loading: boolean;
   signOut: () => Promise<void>;
 }
@@ -13,28 +16,18 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<LocalUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    const {
-      data: { subscription }
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    // Local-only mode: always signed in as a single user
+    setUser({ id: "local-user", email: null });
+    setLoading(false);
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
+    // No-op in local mode, but keep signature for components
+    setUser({ id: "local-user", email: null });
   };
 
   return <AuthContext.Provider value={{ user, loading, signOut }}>{children}</AuthContext.Provider>;

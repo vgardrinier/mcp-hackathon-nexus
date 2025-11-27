@@ -14,7 +14,6 @@ if (result.error) {
 }
 
 const envSchema = z.object({
-  API_KEY: z.string().min(1, "API_KEY environment variable is required"),
   HTTP_SERVER_PORT: z
     .coerce
     .number()

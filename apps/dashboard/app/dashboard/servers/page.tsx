@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth/AuthProvider";
 import Link from "next/link";
 
 interface Server {
@@ -19,58 +17,47 @@ interface Server {
 }
 
 export default function ServersPage() {
-  const { user, loading: authLoading } = useAuth();
-  const router = useRouter();
   const [servers, setServers] = useState<Server[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login");
-      return;
-    }
+    const delay = window.location.hash.includes("access_token") || window.location.search.includes("code") ? 1000 : 0;
 
-    if (user) {
-      // Wait a bit after OAuth redirect to ensure session is established
-      const delay = window.location.hash.includes("access_token") || window.location.search.includes("code") ? 1000 : 0;
-      
-      setTimeout(() => {
-        fetch("/api/user/mcp/servers", {
-          credentials: "include", // Ensure cookies are sent
-          cache: "no-store",
-          headers: {
-            "Content-Type": "application/json",
-            "Cache-Control": "no-cache"
+    setTimeout(() => {
+      fetch("/api/user/mcp/servers", {
+        credentials: "include",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache"
+        }
+      })
+        .then((res) => {
+          if (!res.ok) {
+            console.error("API error:", res.status, res.statusText);
+            return res.json().then((data) => {
+              console.error("API error data:", data);
+              throw new Error(data.error || "Failed to fetch servers");
+            });
           }
+          return res.json();
         })
-          .then((res) => {
-            if (!res.ok) {
-              console.error("API error:", res.status, res.statusText);
-              return res.json().then(data => {
-                console.error("API error data:", data);
-                throw new Error(data.error || "Failed to fetch servers");
-              });
-            }
-            return res.json();
-          })
-          .then((data) => {
-            // Ensure data is an array
-            if (Array.isArray(data)) {
-              setServers(data);
-            } else {
-              console.error("Invalid server data:", data);
-              setServers([]);
-            }
-            setLoading(false);
-          })
-          .catch((error) => {
-            console.error("Failed to fetch servers:", error);
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setServers(data);
+          } else {
+            console.error("Invalid server data:", data);
             setServers([]);
-            setLoading(false);
-          });
-      }, delay);
-    }
-  }, [user, authLoading, router]);
+          }
+          setLoading(false);
+        })
+        .catch((error) => {
+          console.error("Failed to fetch servers:", error);
+          setServers([]);
+          setLoading(false);
+        });
+    }, delay);
+  }, []);
 
   const handleInstall = async (serverId: string) => {
     try {
@@ -135,7 +122,7 @@ export default function ServersPage() {
     }
   };
 
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <div style={{ padding: "2rem" }}>
         <p>Loading...</p>

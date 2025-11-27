@@ -12,7 +12,7 @@ This repo now ships a Compose setup that runs both services (Next.js dashboard +
    - `SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
    - Optional Notion OAuth client if you plan to test that flow
 2) MCP env: copy `apps/mcp/.env.example` to `apps/mcp/.env` and fill:
-   - `API_KEY` (any secret string; used by the MCP HTTP server auth)
+  - (no API key needed in local mode)
    - `HTTP_SERVER_PORT=3001`
    - Optional: `MCP_SERVERS_CONFIG` if you want a different YAML path (defaults to `apps/mcp/servers/config.yml`)
 3) Build images: `docker compose build`
