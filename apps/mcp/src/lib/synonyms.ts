@@ -40,6 +40,11 @@ export const SYNONYMS: Record<string, string[]> = {
   insert: ["add", "create", "new", "write"],
   row: ["record", "entry", "item", "data"],
 
+  // Supabase-specific
+  supabase: ["database", "db", "postgres", "backend", "project", "table"],
+  postgres: ["postgresql", "database", "db", "sql"],
+  postgresql: ["postgres", "database", "db"],
+
   // Project/workspace terms
   project: ["workspace", "repo", "repository", "board"],
   workspace: ["project", "organization", "team"],
