@@ -26,11 +26,13 @@ irm https://raw.githubusercontent.com/vgardrinier/mcp-hackathon-nexus/master/ins
 ```
 
 The install script will:
-1. Ask if you have Docker (uses native mode if not)
-2. Set up config directories
+1. Check if Docker is installed and running
+2. Set up config directories (`~/.config/nexus/`)
 3. Create default server configs (GitHub, Linear)
-4. Start Nexus services
+4. Clone repo and start services with Docker
 5. Print Cursor config JSON ready to copy-paste
+
+**Takes ~30 seconds. No Node.js or dependencies needed on your machine.**
 
 ## After Installation
 
@@ -46,12 +48,9 @@ The install script will:
 
 ## Requirements
 
-**Docker mode** (recommended):
-- Docker installed and running
+- **Docker** (required) - [Get Docker Desktop](https://www.docker.com/products/docker-desktop)
 
-**Native mode**:
-- Node.js 18+
-- pnpm (auto-installed if missing)
+That's it! Docker handles all dependencies internally.
 
 ## Supported MCP Servers
 
@@ -78,23 +77,15 @@ All processing happens locally—zero cloud dependencies.
 ## Management
 
 **Dashboard**: http://localhost:3000
-**Logs**: `docker compose logs -f` (Docker) or `pm2 logs` (native)
-**Stop**: `docker compose down` (Docker) or `pm2 stop all` (native)
-**Restart**: `docker compose restart` (Docker) or `pm2 restart all` (native)
+**Logs**: `docker compose logs -f`
+**Stop**: `docker compose down`
+**Restart**: `docker compose restart`
 
 ## Uninstall
 
-**Docker mode:**
 ```bash
-cd ~/.nexus/repo  # or wherever you cloned
+cd ~/.nexus/repo
 docker compose down -v
-rm -rf ~/.nexus ~/.config/nexus
-```
-
-**Native mode:**
-```bash
-pm2 stop all
-pm2 delete all
 rm -rf ~/.nexus ~/.config/nexus
 ```
 

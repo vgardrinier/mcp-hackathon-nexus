@@ -37,44 +37,27 @@ else
     exit 1
 fi
 
-# Ask about Docker
+# Check for Docker
 echo ""
-echo -e "${YELLOW}Do you have Docker installed and running? (y/n)${NC}"
-read -r HAS_DOCKER
-
-USE_DOCKER=false
-if [[ "$HAS_DOCKER" =~ ^[Yy]$ ]]; then
-    # Verify Docker is actually running
-    if command -v docker &> /dev/null && docker ps &> /dev/null; then
-        USE_DOCKER=true
-        echo -e "${GREEN}✓${NC} Docker detected and running"
-    else
-        echo -e "${YELLOW}⚠${NC} Docker command not found or not running"
-        echo "Please start Docker and try again, or continue with native mode"
-        echo ""
-        echo -e "${YELLOW}Continue with native mode? (y/n)${NC}"
-        read -r USE_NATIVE
-        if [[ ! "$USE_NATIVE" =~ ^[Yy]$ ]]; then
-            exit 1
-        fi
-    fi
+if ! command -v docker &> /dev/null; then
+    echo -e "${RED}✗${NC} Docker is required to run Nexus"
+    echo ""
+    echo -e "${BLUE}Please install Docker:${NC}"
+    echo "  Mac: https://www.docker.com/products/docker-desktop"
+    echo "  Linux: https://docs.docker.com/engine/install/"
+    echo ""
+    echo "Then run this script again."
+    exit 1
 fi
 
-# Check Node.js if not using Docker
-if [ "$USE_DOCKER" = false ]; then
-    if ! command -v node &> /dev/null; then
-        echo -e "${RED}✗${NC} Node.js is required for native mode"
-        echo "Please install Node.js from https://nodejs.org"
-        exit 1
-    fi
-    echo -e "${GREEN}✓${NC} Node.js detected: $(node --version)"
-
-    if ! command -v pnpm &> /dev/null; then
-        echo -e "${YELLOW}Installing pnpm...${NC}"
-        npm install -g pnpm
-    fi
-    echo -e "${GREEN}✓${NC} pnpm detected: $(pnpm --version)"
+if ! docker ps &> /dev/null 2>&1; then
+    echo -e "${RED}✗${NC} Docker is installed but not running"
+    echo ""
+    echo "Please start Docker Desktop and try again."
+    exit 1
 fi
+
+echo -e "${GREEN}✓${NC} Docker detected and running"
 
 # Create config directory structure
 echo ""
@@ -162,45 +145,24 @@ fi
 
 # Start services
 echo ""
-if [ "$USE_DOCKER" = true ]; then
-    echo -e "${BLUE}Starting Nexus with Docker...${NC}"
-    docker compose up -d
+echo -e "${BLUE}Starting Nexus with Docker...${NC}"
+docker compose up -d
 
-    # Wait for services to be ready
-    echo -e "${YELLOW}Waiting for services to start...${NC}"
-    sleep 5
+# Wait for services to be ready
+echo -e "${YELLOW}Waiting for services to start...${NC}"
+sleep 5
 
-    # Check if services are running
-    if docker compose ps | grep -q "Up"; then
-        echo -e "${GREEN}✓${NC} Nexus services started successfully"
-    else
-        echo -e "${RED}✗${NC} Failed to start services"
-        docker compose logs
-        exit 1
-    fi
-
-    MCP_URL="http://localhost:3001/mcp"
-    DASHBOARD_URL="http://localhost:3000"
-else
-    echo -e "${BLUE}Starting Nexus in native mode...${NC}"
-
-    # Install dependencies
-    pnpm install
-
-    # Start services in background using pm2
-    if ! command -v pm2 &> /dev/null; then
-        echo -e "${YELLOW}Installing pm2...${NC}"
-        pnpm add -g pm2
-    fi
-
-    pm2 start ecosystem.config.js
-
+# Check if services are running
+if docker compose ps | grep -q "Up"; then
     echo -e "${GREEN}✓${NC} Nexus services started successfully"
-    echo -e "${YELLOW}Tip: Use 'pm2 logs' to view logs, 'pm2 stop all' to stop${NC}"
-
-    MCP_URL="http://localhost:3001/mcp"
-    DASHBOARD_URL="http://localhost:3000"
+else
+    echo -e "${RED}✗${NC} Failed to start services"
+    docker compose logs
+    exit 1
 fi
+
+MCP_URL="http://localhost:3001/mcp"
+DASHBOARD_URL="http://localhost:3000"
 
 # Print success message and Cursor config
 echo ""

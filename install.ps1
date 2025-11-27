@@ -24,46 +24,26 @@ Write-ColorOutput Green "✓ Detected OS: Windows"
 # Set config directory
 $ConfigDir = Join-Path $env:APPDATA "nexus"
 
-# Ask about Docker
+# Check for Docker
 Write-Output ""
-Write-ColorOutput Yellow "Do you have Docker installed and running? (y/n)"
-$HasDocker = Read-Host
-
-$UseDocker = $false
-if ($HasDocker -match "^[Yy]$") {
-    # Verify Docker is actually running
-    try {
-        docker ps | Out-Null
-        $UseDocker = $true
-        Write-ColorOutput Green "✓ Docker detected and running"
-    } catch {
-        Write-ColorOutput Yellow "⚠ Docker command not found or not running"
-        Write-Output "Please start Docker and try again, or continue with native mode"
-        Write-Output ""
-        Write-ColorOutput Yellow "Continue with native mode? (y/n)"
-        $UseNative = Read-Host
-        if ($UseNative -notmatch "^[Yy]$") {
-            exit 1
-        }
-    }
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+    Write-ColorOutput Red "✗ Docker is required to run Nexus"
+    Write-Output ""
+    Write-ColorOutput Blue "Please install Docker Desktop:"
+    Write-Output "  https://www.docker.com/products/docker-desktop"
+    Write-Output ""
+    Write-Output "Then run this script again."
+    exit 1
 }
 
-# Check Node.js if not using Docker
-if (-not $UseDocker) {
-    if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-        Write-ColorOutput Red "✗ Node.js is required for native mode"
-        Write-Output "Please install Node.js from https://nodejs.org"
-        exit 1
-    }
-    $NodeVersion = node --version
-    Write-ColorOutput Green "✓ Node.js detected: $NodeVersion"
-
-    if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
-        Write-ColorOutput Yellow "Installing pnpm..."
-        npm install -g pnpm
-    }
-    $PnpmVersion = pnpm --version
-    Write-ColorOutput Green "✓ pnpm detected: $PnpmVersion"
+try {
+    docker ps | Out-Null
+    Write-ColorOutput Green "✓ Docker detected and running"
+} catch {
+    Write-ColorOutput Red "✗ Docker is installed but not running"
+    Write-Output ""
+    Write-Output "Please start Docker Desktop and try again."
+    exit 1
 }
 
 # Create config directory structure
@@ -154,46 +134,25 @@ if ((Test-Path "docker-compose.yml") -and (Test-Path "apps\mcp")) {
 
 # Start services
 Write-Output ""
-if ($UseDocker) {
-    Write-ColorOutput Blue "Starting Nexus with Docker..."
-    docker compose up -d
+Write-ColorOutput Blue "Starting Nexus with Docker..."
+docker compose up -d
 
-    # Wait for services to be ready
-    Write-ColorOutput Yellow "Waiting for services to start..."
-    Start-Sleep -Seconds 5
+# Wait for services to be ready
+Write-ColorOutput Yellow "Waiting for services to start..."
+Start-Sleep -Seconds 5
 
-    # Check if services are running
-    $DockerStatus = docker compose ps
-    if ($DockerStatus -match "Up") {
-        Write-ColorOutput Green "✓ Nexus services started successfully"
-    } else {
-        Write-ColorOutput Red "✗ Failed to start services"
-        docker compose logs
-        exit 1
-    }
-
-    $McpUrl = "http://localhost:3001/mcp"
-    $DashboardUrl = "http://localhost:3000"
-} else {
-    Write-ColorOutput Blue "Starting Nexus in native mode..."
-
-    # Install dependencies
-    pnpm install
-
-    # Start services in background using pm2
-    if (-not (Get-Command pm2 -ErrorAction SilentlyContinue)) {
-        Write-ColorOutput Yellow "Installing pm2..."
-        pnpm add -g pm2
-    }
-
-    pm2 start ecosystem.config.js
-
+# Check if services are running
+$DockerStatus = docker compose ps
+if ($DockerStatus -match "Up") {
     Write-ColorOutput Green "✓ Nexus services started successfully"
-    Write-ColorOutput Yellow "Tip: Use 'pm2 logs' to view logs, 'pm2 stop all' to stop"
-
-    $McpUrl = "http://localhost:3001/mcp"
-    $DashboardUrl = "http://localhost:3000"
+} else {
+    Write-ColorOutput Red "✗ Failed to start services"
+    docker compose logs
+    exit 1
 }
+
+$McpUrl = "http://localhost:3001/mcp"
+$DashboardUrl = "http://localhost:3000"
 
 # Print success message and Cursor config
 Write-Output ""
