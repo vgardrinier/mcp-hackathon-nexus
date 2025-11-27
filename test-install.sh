@@ -26,12 +26,14 @@ echo "📦 Saving current state..."
 
 if [ -d ~/.config/nexus ]; then
     echo "  • Backing up ~/.config/nexus"
+    rm -rf ~/.config/nexus.backup
     mv ~/.config/nexus ~/.config/nexus.backup
     BACKUP_CONFIG=true
 fi
 
 if [ -d ~/.nexus ]; then
     echo "  • Backing up ~/.nexus"
+    rm -rf ~/.nexus.backup
     mv ~/.nexus ~/.nexus.backup
     BACKUP_REPO=true
 fi
