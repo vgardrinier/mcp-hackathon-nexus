@@ -249,10 +249,7 @@ cat <<'CURSOR_CONFIG'
 {
   "mcpServers": {
     "nexus": {
-      "transport": {
-        "type": "streamableHttp",
-        "url": "http://localhost:3001/mcp"
-      }
+      "url": "http://localhost:3001/mcp"
     }
   }
 }
