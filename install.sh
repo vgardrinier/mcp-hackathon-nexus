@@ -172,6 +172,39 @@ else
     echo -e "${GREEN}✓${NC} Repository ready: $REPO_DIR"
 fi
 
+# Install nexus CLI
+echo ""
+echo -e "${BLUE}Installing nexus CLI...${NC}"
+if [ -f "$REPO_DIR/nexus" ]; then
+    chmod +x "$REPO_DIR/nexus"
+
+    # Try /usr/local/bin first (system-wide, may need sudo)
+    if [ -w "/usr/local/bin" ]; then
+        ln -sf "$REPO_DIR/nexus" /usr/local/bin/nexus
+        echo -e "${GREEN}✓${NC} nexus CLI installed to /usr/local/bin/nexus"
+    else
+        # Try with sudo
+        if sudo -n ln -sf "$REPO_DIR/nexus" /usr/local/bin/nexus 2>/dev/null; then
+            echo -e "${GREEN}✓${NC} nexus CLI installed to /usr/local/bin/nexus"
+        else
+            # Fallback: user-local bin directory
+            mkdir -p "$HOME/.local/bin"
+            ln -sf "$REPO_DIR/nexus" "$HOME/.local/bin/nexus"
+            echo -e "${GREEN}✓${NC} nexus CLI installed to $HOME/.local/bin/nexus"
+
+            # Check if ~/.local/bin is in PATH
+            if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+                echo -e "${YELLOW}⚠${NC} Add to your PATH by running:"
+                echo "    echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc"
+                echo "    echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc"
+                echo "    source ~/.bashrc  # or source ~/.zshrc"
+            fi
+        fi
+    fi
+else
+    echo -e "${YELLOW}⚠${NC} nexus CLI script not found, skipping CLI install"
+fi
+
 # Start services
 echo ""
 echo -e "${BLUE}Starting Nexus with Docker...${NC}"
@@ -232,5 +265,10 @@ echo "1. Visit $DASHBOARD_URL to configure your MCP servers"
 echo "2. Add your GitHub token and Linear API key"
 echo "3. Copy the JSON above into Cursor settings"
 echo "4. Restart Cursor to load MCP tools"
+echo ""
+echo -e "${BLUE}Nexus CLI commands:${NC}"
+echo "  nexus logs      - See what data is being read/written"
+echo "  nexus status    - Check service status"
+echo "  nexus help      - Show all commands"
 echo ""
 echo -e "${GREEN}Happy coding! 🚀${NC}"

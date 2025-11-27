@@ -9,6 +9,7 @@ import type { EndServerData } from "./endServer/types.js";
 import { hasValidEnv, parseNamespacedToolName } from "./mcpUtils.js";
 import { loadConfiguredEndServers } from "./configLoader.js";
 import type { ToolRouter } from "./toolRouter.js";
+import { ActivityLogger } from "./activityLogger.js";
 
 const SERVER_INFO = {
   name: "Nexus L2 MCP",
@@ -41,6 +42,7 @@ const endServers: Record<string, EndServer> = {};
 const endServersData: Record<string, EndServerData> = {};
 let pollingInterval: NodeJS.Timeout | null = null;
 let toolRouter: ToolRouter | null = null;
+const activityLogger = ActivityLogger.getInstance();
 
 // Query context tracking for smart filtering
 let lastQueryIntent: string | null = null;
@@ -329,8 +331,9 @@ proxyMCPServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (result.selectedTool.endsWith("_nxs")) {
         const { nexusId, toolName } = parseNamespacedToolName(result.selectedTool);
         const endServerId = namespaceToServerId[nexusId];
+        const endServer = endServers[endServerId];
 
-        console.log(`\x1B[90m[Auto-Select] Executing ${toolName} on ${endServers[endServerId].name}\x1B[0m`);
+        console.log(`\x1B[90m[Auto-Select] Executing ${toolName} on ${endServer.name}\x1B[0m`);
 
         // If no args provided, try to extract from intent (basic heuristic)
         let finalArgs = args || {};
@@ -346,22 +349,38 @@ proxyMCPServer.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
-        const toolResult = await endServers[endServerId].callTool(toolName, {
-          ...request.params,
-          arguments: finalArgs
-        });
+        // Log tool call start
+        const logHandle = await activityLogger.logToolCall(
+          endServer.name,
+          endServer.id,
+          toolName,
+          finalArgs
+        );
 
-        // Add routing metadata to response
-        return {
-          ...toolResult,
-          content: [
-            {
-              type: "text",
-              text: `[Auto-selected: ${result.selectedTool} (${result.confidence} confidence)]\n${result.reason}\n\n`
-            },
-            ...(Array.isArray(toolResult.content) ? toolResult.content : [toolResult.content])
-          ]
-        };
+        try {
+          const toolResult = await endServers[endServerId].callTool(toolName, {
+            ...request.params,
+            arguments: finalArgs
+          });
+
+          // Log completion
+          await logHandle.complete(toolResult);
+
+          return {
+            ...toolResult,
+            content: [
+              {
+                type: "text",
+                text: `[Auto-selected: ${result.selectedTool} (${result.confidence} confidence)]\n${result.reason}\n\n`
+              },
+              ...(Array.isArray(toolResult.content) ? toolResult.content : [toolResult.content])
+            ]
+          };
+        } catch (error) {
+          // Log error
+          await logHandle.complete(undefined, error instanceof Error ? error.message : String(error));
+          throw error;
+        }
       }
 
       return {
@@ -388,7 +407,25 @@ proxyMCPServer.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (request.params.name.endsWith("_nxs")) {
     const { nexusId, toolName } = parseNamespacedToolName(request.params.name);
     const endServerId = namespaceToServerId[nexusId];
-    return await endServers[endServerId].callTool(toolName, request.params);
+    const endServer = endServers[endServerId];
+
+    // Log tool call
+    const args = (request.params.arguments as Record<string, unknown>) || {};
+    const logHandle = await activityLogger.logToolCall(
+      endServer.name,
+      endServer.id,
+      toolName,
+      args
+    );
+
+    try {
+      const result = await endServer.callTool(toolName, request.params);
+      await logHandle.complete(result);
+      return result;
+    } catch (error) {
+      await logHandle.complete(undefined, error instanceof Error ? error.message : String(error));
+      throw error;
+    }
   }
 
   throw new Error(`Unknown tool: ${request.params.name}`);
