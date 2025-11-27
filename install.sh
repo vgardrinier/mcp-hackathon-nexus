@@ -137,7 +137,7 @@ else
         git pull origin master
     else
         echo -e "${BLUE}Cloning Nexus repository...${NC}"
-        git clone -b local/functional https://github.com/vgardrinier/mcp-hackathon-nexus.git "$REPO_DIR"
+        git clone https://github.com/vgardrinier/mcp-hackathon-nexus.git "$REPO_DIR"
     fi
     cd "$REPO_DIR"
     echo -e "${GREEN}✓${NC} Repository ready: $REPO_DIR"
