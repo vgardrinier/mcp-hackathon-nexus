@@ -17,12 +17,12 @@ Nexus runs fully on your machine—nothing ever leaves your device. Get hundreds
 
 ### Mac/Linux
 ```bash
-curl -s https://get.nexus.sh | bash
+curl -sL https://raw.githubusercontent.com/vgardrinier/mcp-hackathon-nexus/master/install.sh | bash
 ```
 
 ### Windows
 ```powershell
-irm https://get.nexus.sh/install.ps1 | iex
+irm https://raw.githubusercontent.com/vgardrinier/mcp-hackathon-nexus/master/install.ps1 | iex
 ```
 
 The install script will:
