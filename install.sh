@@ -65,7 +65,6 @@ echo -e "${BLUE}Setting up Nexus configuration...${NC}"
 mkdir -p "$CONFIG_DIR/servers/custom/github"
 mkdir -p "$CONFIG_DIR/servers/custom/linear"
 mkdir -p "$CONFIG_DIR/servers/custom/supabase"
-mkdir -p "$CONFIG_DIR/servers/custom/playwright"
 
 # Create GitHub server config
 cat > "$CONFIG_DIR/servers/custom/github/config.yml" <<'EOF'
@@ -148,25 +147,6 @@ config:
     - "@supabase/mcp-server-supabase"
     - "--access-token"
     - "${SUPABASE_ACCESS_TOKEN}"
-EOF
-
-# Create Playwright server config
-cat > "$CONFIG_DIR/servers/custom/playwright/config.yml" <<'EOF'
-id: playwright-mcp-server
-name: Playwright
-description: Browser automation and web scraping with Playwright
-sourceUrl: https://github.com/microsoft/playwright
-category: official
-logoUrl: https://playwright.dev/img/playwright-logo.svg
-
-requiresAuth: false
-
-config:
-  transport: stdio
-  command: npx
-  args:
-    - "-y"
-    - "@playwright/mcp"
 EOF
 
 echo -e "${GREEN}✓${NC} Created server configs in $CONFIG_DIR"

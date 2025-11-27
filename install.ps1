@@ -52,7 +52,6 @@ Write-ColorOutput Blue "Setting up Nexus configuration..."
 New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\github") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\linear") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\supabase") | Out-Null
-New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\playwright") | Out-Null
 
 # Create GitHub server config
 $GithubConfig = @"
@@ -139,26 +138,6 @@ config:
     - "`${SUPABASE_ACCESS_TOKEN}"
 "@
 $SupabaseConfig | Out-File -FilePath (Join-Path $ConfigDir "servers\custom\supabase\config.yml") -Encoding UTF8
-
-# Create Playwright server config
-$PlaywrightConfig = @"
-id: playwright-mcp-server
-name: Playwright
-description: Browser automation and web scraping with Playwright
-sourceUrl: https://github.com/microsoft/playwright
-category: official
-logoUrl: https://playwright.dev/img/playwright-logo.svg
-
-requiresAuth: false
-
-config:
-  transport: stdio
-  command: npx
-  args:
-    - "-y"
-    - "@playwright/mcp"
-"@
-$PlaywrightConfig | Out-File -FilePath (Join-Path $ConfigDir "servers\custom\playwright\config.yml") -Encoding UTF8
 
 Write-ColorOutput Green "✓ Created server configs in $ConfigDir"
 
