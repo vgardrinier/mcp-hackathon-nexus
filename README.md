@@ -28,7 +28,7 @@ irm https://raw.githubusercontent.com/vgardrinier/mcp-hackathon-nexus/master/ins
 The install script will:
 1. Check if Docker is installed and running
 2. Set up config directories (`~/.config/nexus/`)
-3. Create default server configs (GitHub, Linear)
+3. Create default server configs (GitHub, Linear, Supabase)
 4. Clone repo and start services with Docker
 5. Print Cursor config JSON ready to copy-paste
 
