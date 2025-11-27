@@ -64,6 +64,7 @@ echo ""
 echo -e "${BLUE}Setting up Nexus configuration...${NC}"
 mkdir -p "$CONFIG_DIR/servers/custom/github"
 mkdir -p "$CONFIG_DIR/servers/custom/linear"
+mkdir -p "$CONFIG_DIR/servers/custom/supabase"
 
 # Create GitHub server config
 cat > "$CONFIG_DIR/servers/custom/github/config.yml" <<'EOF'
@@ -118,6 +119,29 @@ config:
   args:
     - "-y"
     - "@mseep/linear-mcp"
+EOF
+
+# Create Supabase server config
+cat > "$CONFIG_DIR/servers/custom/supabase/config.yml" <<'EOF'
+id: supabase-mcp-server
+name: Supabase
+description: Manage Supabase projects, database, auth, and storage
+sourceUrl: https://github.com/supabase-community/supabase-mcp
+category: official
+logoUrl: https://supabase.com/favicon/favicon-32x32.png
+
+requiresAuth: true
+
+env:
+  - key: PROJECT_REF
+    name: Supabase Project Reference
+    description: Your project ref (optional, for scoping to specific project)
+    required: false
+    valueFromEnv: SUPABASE_PROJECT_REF
+
+config:
+  transport: http
+  url: https://mcp.supabase.com/mcp
 EOF
 
 echo -e "${GREEN}✓${NC} Created server configs in $CONFIG_DIR"
