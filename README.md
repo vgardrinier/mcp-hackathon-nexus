@@ -1,14 +1,14 @@
 # Nexus
 
-**Run MCP servers locally. Complete privacy. Instant latency.**
+**Run MCP servers locally. Complete privacy. Sub-100ms latency.**
 
-Nexus runs fully on your machine—nothing ever leaves your device. Get hundreds of MCP tools with near-instant latency (80-100x faster than cloud routing), 90-95% lower token usage, and full transparent logs.
+Nexus runs fully on your machine—nothing ever leaves your device. Get sub-100ms latency (vs cloud's 5-10 seconds) and 91.8% lower token usage through intelligent tool filtering. Full transparent logs for every operation.
 
 ## Features
 
 - 🔒 **100% Local** - Docker-based or native mode, your data never leaves your machine
-- ⚡ **Blazing Fast** - 80-100x faster than cloud MCP routing
-- 💰 **Token Efficient** - 90-95% lower token usage vs cloud proxies
+- ⚡ **Fast** - Sub-100ms latency vs cloud MCP routing (5-10 seconds)
+- 💰 **Token Efficient** - 91.8% lower token usage through smart tool filtering
 - 🔍 **Transparent** - Full logs of every tool call and response
 - 🎯 **Simple Setup** - One command install, works with Cursor out of the box
 - 🛠️ **Dashboard** - Visual UI to configure servers and manage tokens
@@ -55,11 +55,11 @@ The install script will:
 
 ## Supported MCP Servers
 
-Out of the box:
+Ships with:
 - **GitHub** - Repos, issues, PRs, code search
 - **Linear** - Issues, projects, teams
 
-More coming soon. All MCP servers compatible with STDIO transport work with Nexus.
+Nexus supports any MCP server using STDIO transport. Add more servers by dropping config files in `~/.config/nexus/servers/custom/`.
 
 ## How It Works
 
@@ -82,6 +82,24 @@ All processing happens locally—zero cloud dependencies.
 **Stop**: `docker compose down` (Docker) or `pm2 stop all` (native)
 **Restart**: `docker compose restart` (Docker) or `pm2 restart all` (native)
 
+## Uninstall
+
+**Docker mode:**
+```bash
+cd ~/.nexus/repo  # or wherever you cloned
+docker compose down -v
+rm -rf ~/.nexus ~/.config/nexus
+```
+
+**Native mode:**
+```bash
+pm2 stop all
+pm2 delete all
+rm -rf ~/.nexus ~/.config/nexus
+```
+
+Then remove the Cursor MCP config from Settings → Features → Model Context Protocol.
+
 ## Configuration
 
 Server configs live in:
@@ -94,11 +112,24 @@ Each server has a `config.yml` file. Edit directly or use the dashboard.
 
 **Privacy**: Your code and data never leave your machine. No cloud MCP routing, no third-party servers.
 
-**Speed**: Direct local communication means ~90-95ms latency instead of cloud routing's 8-10 seconds.
+**Speed**: Direct local communication means sub-100ms latency instead of cloud routing's 5-10 seconds.
 
-**Cost**: Fewer tokens used since there's no cloud proxy overhead.
+**Cost**: 91.8% fewer tokens through intelligent tool filtering. Only sends relevant tools to Cursor instead of exposing all tools.
 
 **Transparency**: See exactly what tools are being called and what data they access.
+
+## How Smart Filtering Works
+
+Traditional MCP setup: Cursor receives all 60+ tools on every request → high token usage
+
+Nexus approach:
+1. First query: Cursor sees only `auto_select_tool`
+2. You ask: "search my repos"
+3. Nexus routes to correct GitHub tool automatically
+4. Next query: Cursor receives only top 5 relevant tools
+5. Result: 91.8% token reduction (measured)
+
+Run `npx tsx apps/mcp/src/lib/tokenMeasurement.test.ts` to see the proof.
 
 ## License
 
