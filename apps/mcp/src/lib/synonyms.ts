@@ -45,6 +45,13 @@ export const SYNONYMS: Record<string, string[]> = {
   postgres: ["postgresql", "database", "db", "sql"],
   postgresql: ["postgres", "database", "db"],
 
+  // Playwright/Browser automation
+  playwright: ["browser", "automation", "scraping", "web", "screenshot", "testing"],
+  browser: ["web", "page", "site", "automation", "playwright"],
+  automation: ["automate", "script", "bot", "testing", "playwright"],
+  screenshot: ["capture", "image", "screen", "snapshot", "browser"],
+  scraping: ["scrape", "extract", "crawl", "web", "data"],
+
   // Project/workspace terms
   project: ["workspace", "repo", "repository", "board"],
   workspace: ["project", "organization", "team"],
