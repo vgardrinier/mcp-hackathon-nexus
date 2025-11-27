@@ -6,8 +6,6 @@ services:
     command: >
       sh -c "pnpm install --frozen-lockfile
       && pnpm --filter nexus-dashboard dev --hostname 0.0.0.0 --port 3000"
-    env_file:
-      - ./apps/dashboard/.env
     environment:
       CHOKIDAR_USEPOLLING: "1"
       NEXT_TELEMETRY_DISABLED: "1"
@@ -27,8 +25,6 @@ services:
     command: >
       sh -c "sleep 5 && pnpm install --frozen-lockfile
       && pnpm dev:mcp:http"
-    env_file:
-      - ./apps/mcp/.env
     ports:
       - "3001:3001"
     volumes:
