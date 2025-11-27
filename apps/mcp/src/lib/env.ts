@@ -15,10 +15,6 @@ if (result.error) {
 
 const envSchema = z.object({
   API_KEY: z.string().min(1, "API_KEY environment variable is required"),
-  DASHBOARD_URL: z
-    .string()
-    .url("DASHBOARD_URL must be a valid URL")
-    .min(1, "DASHBOARD_URL environment variable is required"),
   HTTP_SERVER_PORT: z
     .coerce
     .number()
@@ -32,5 +28,3 @@ const envSchema = z.object({
 });
 
 export const env = envSchema.parse(process.env);
-
-

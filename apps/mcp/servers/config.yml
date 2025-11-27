@@ -1,0 +1,12 @@
+# MCP Server Configuration
+# This file defines where to find your MCP server definitions
+
+sources:
+  # Official/default servers (checked into git)
+  - path: ./default
+    category: official
+
+  # Custom servers (gitignored - for your personal configs)
+  - path: ./custom
+    category: custom
+    optional: true
