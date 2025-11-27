@@ -8,7 +8,10 @@ import {
   InternalServerErrorResponseSkeleton,
   InvalidSessionIdResponseSkeleton
 } from "./lib/httpSkeleton.js";
-import { cleanup, initializeServer, proxyMCPServer } from "./lib/mcpProxy.js";
+import { verifyBearerToken } from "./lib/httpAuth.js";
+import { cleanup, initializeServer, proxyMCPServer, setToolRouter, getEndServers, getServerIdToNamespace } from "./lib/mcpProxy.js";
+import { buildToolIndex } from "./lib/toolIndexer.js";
+import { ToolRouter } from "./lib/toolRouter.js";
 
 console.log("Starting Nexus L2 MCP HTTP server...");
 
@@ -26,8 +29,21 @@ app.use(express.json());
 
 const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
+function isAuthorized(req: Request): boolean {
+  if (env.ALLOW_UNAUTHENTICATED_MCP) {
+    return true;
+  }
+  return verifyBearerToken(req, env.API_KEY);
+}
+
 async function handleMCPRequest(req: Request, res: Response) {
   try {
+    if (!isAuthorized(req)) {
+      console.log(`\x1B[91m[Auth] Unauthorized request from ${req.headers["user-agent"] || "unknown"}\x1B[0m`);
+      res.status(401).json({ error: "Unauthorized: Invalid API key" });
+      return;
+    }
+
     const acceptHeader = req.headers.accept || "";
     if (!acceptHeader.includes("application/json") || !acceptHeader.includes("text/event-stream")) {
       req.headers.accept = "application/json, text/event-stream";
@@ -44,6 +60,7 @@ async function handleMCPRequest(req: Request, res: Response) {
     const relevantHeaders = {
       "mcp-session-id": req.headers["mcp-session-id"],
       "Mcp-Session-Id": req.headers["mcp-session-id"],
+      "authorization": req.headers["authorization"] ? "Bearer ***" : undefined,
       "accept": req.headers["accept"],
       "content-type": req.headers["content-type"],
       "user-agent": req.headers["user-agent"]
@@ -147,6 +164,11 @@ async function handleMCPRequest(req: Request, res: Response) {
 app.post("/mcp", handleMCPRequest);
 
 async function handleMCPSessionRequest(req: Request, res: Response) {
+  if (!isAuthorized(req)) {
+    res.status(401).json({ error: "Unauthorized: Invalid API key" });
+    return;
+  }
+
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
   if (!sessionId || !transports[sessionId]) {
     res.status(400).json(InvalidSessionIdResponseSkeleton);
@@ -168,9 +190,19 @@ async function main() {
       );
     });
 
-    initializeServer().catch((error) => {
-      console.error("\x1B[91mError initializing end servers:", error, "\x1B[0m");
-    });
+    // Initialize end servers first
+    await initializeServer();
+
+    // Build tool index from registered end servers
+    const endServers = getEndServers();
+    const serverIdToNamespace = getServerIdToNamespace();
+    const toolIndex = await buildToolIndex(endServers, serverIdToNamespace);
+
+    // Initialize and set the tool router
+    const toolRouter = new ToolRouter(toolIndex);
+    setToolRouter(toolRouter);
+
+    console.log("\x1B[92m[Init] ✅ Tool router ready for intelligent routing\x1B[0m");
   } catch (error) {
     console.error("\nFatal error starting HTTP server:", error);
     process.exit(1);

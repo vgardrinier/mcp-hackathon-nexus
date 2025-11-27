@@ -8,6 +8,7 @@ import { EndServer } from "./endServer/endServer.js";
 import type { EndServerData } from "./endServer/types.js";
 import { hasValidEnv, parseNamespacedToolName } from "./mcpUtils.js";
 import { loadConfiguredEndServers } from "./configLoader.js";
+import type { ToolRouter } from "./toolRouter.js";
 
 const SERVER_INFO = {
   name: "Nexus L2 MCP",
@@ -39,6 +40,12 @@ let namespaceCounter = 0;
 const endServers: Record<string, EndServer> = {};
 const endServersData: Record<string, EndServerData> = {};
 let pollingInterval: NodeJS.Timeout | null = null;
+let toolRouter: ToolRouter | null = null;
+
+// Query context tracking for smart filtering
+let lastQueryIntent: string | null = null;
+let lastQueryTimestamp: number = 0;
+const QUERY_CONTEXT_TTL = 30000; // 30 seconds
 
 function registerEndServer(endServerData: EndServerData): boolean {
   if (!hasValidEnv(endServerData)) {
@@ -133,11 +140,10 @@ function hasServerConfigChanged(existing: EndServerData, incoming: EndServerData
 const customTools: Tool[] = [
   {
     name: "list-end-servers",
-    description: "List the MCP servers installed in the local Nexus state.",
+    description: "List the MCP servers the user has installed for this Nexus API key.",
     inputSchema: {
       type: "object",
-      properties: {},
-      additionalProperties: false
+      properties: {}
     }
   },
   {
@@ -145,8 +151,29 @@ const customTools: Tool[] = [
     description: "List basic connection status for installed MCP servers.",
     inputSchema: {
       type: "object",
-      properties: {},
-      additionalProperties: false
+      properties: {}
+    }
+  },
+  {
+    name: "auto_select_tool",
+    description: "Automatically selects and executes the best tool for a given natural language intent. Use this when you're unsure which specific tool to call.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        intent: {
+          type: "string",
+          description: "Natural language description of what you want to accomplish (e.g., 'search for code', 'get last pull requests')"
+        },
+        args: {
+          type: "object",
+          description: "Arguments to pass to the selected tool"
+        },
+        _intent: {
+          type: "string",
+          description: "Optional: Explicit tool name if you know which tool to use"
+        }
+      },
+      required: ["intent"]
     }
   }
 ];
@@ -191,13 +218,16 @@ const customToolExecutors: Record<string, () => Promise<{ content: unknown; isEr
         })),
         isError: false
       };
-    }
+    },
+  "auto_select_tool": async () => {
+    throw new Error("auto_select_tool requires arguments and special handling");
+  }
 };
 
 proxyMCPServer.setRequestHandler(ListToolsRequestSchema, async () => {
   console.log("\x1B[94m[Tools] 📋 Client requested tools list...\x1B[0m");
   console.log(`\x1B[90m[Tools] End servers registered: ${Object.keys(endServers).length}\x1B[0m`);
-  
+
   // Debug: Log all registered end servers and their transport status
   if (Object.keys(endServers).length > 0) {
     const serverStatus = Object.keys(endServers).map(id => {
@@ -210,50 +240,145 @@ proxyMCPServer.setRequestHandler(ListToolsRequestSchema, async () => {
     console.log(`\x1B[93m[Tools] ⚠️  No end servers registered. Only custom tools will be available.\x1B[0m`);
   }
 
-  const toolsPerServer: Record<string, Tool[]> = {};
+  // Check if we have a recent query context for smart filtering
+  const hasRecentQuery = lastQueryIntent && (Date.now() - lastQueryTimestamp) < QUERY_CONTEXT_TTL;
 
-  for (const endServerId of Object.keys(endServers)) {
-    if (!endServers[endServerId].isTransportCreated) {
-      console.log(`\x1B[90m[Tools] Skipping ${endServers[endServerId].name} - transport not created\x1B[0m`);
-      continue;
+  if (hasRecentQuery && toolRouter) {
+    console.log(`\x1B[96m[Tools] 🎯 Smart filtering enabled for query: "${lastQueryIntent}"\x1B[0m`);
+
+    // Get top 5 candidate tools from router
+    const candidates = toolRouter.searchTools(lastQueryIntent!, 5);
+    console.log(`\x1B[90m[Tools] Found ${candidates.length} candidate tools\x1B[0m`);
+
+    // Build filtered namespaced tools
+    const filteredTools: Tool[] = [];
+    for (const candidate of candidates) {
+      const endServer = endServers[candidate.serverId];
+      if (!endServer?.isTransportCreated) continue;
+
+      try {
+        const allServerTools = await endServer.listTools();
+        const matchingTool = allServerTools.find(t => t.name === candidate.name);
+
+        if (matchingTool) {
+          filteredTools.push({
+            ...matchingTool,
+            name: candidate.namespacedName,
+            description: `${matchingTool.description || ""}${matchingTool.description ? " " : ""}(End Server: ${endServer.name})`
+          });
+        }
+      } catch (error) {
+        console.error(`\x1B[91m[Tools] Error fetching tool ${candidate.name} from ${endServer.name}\x1B[0m`);
+      }
     }
-    try {
-      console.log(`\x1B[90m[Tools] Fetching tools from ${endServers[endServerId].name}...\x1B[0m`);
-      toolsPerServer[endServerId] = await endServers[endServerId].listTools();
-      console.log(`\x1B[90m[Tools] ${endServers[endServerId].name} returned ${toolsPerServer[endServerId].length} tools\x1B[0m`);
-    } catch (error) {
-      console.error(`\x1B[91m[Tools] Error fetching tools from ${endServers[endServerId].name}: ${error instanceof Error ? error.message : String(error)}\x1B[0m`);
-      toolsPerServer[endServerId] = [];
-    }
+
+    const filteredToolsList = [...customTools, ...filteredTools];
+    console.log(`\x1B[92m[Tools] ✅ Returning ${filteredToolsList.length} filtered tools (smart mode):\x1B[0m`);
+    console.log(`\x1B[90m[Tools]   - ${customTools.length} custom tools: ${customTools.map(t => t.name).join(', ')}\x1B[0m`);
+    console.log(`\x1B[90m[Tools]   - ${filteredTools.length} filtered end server tools: ${filteredTools.map(t => t.name).join(', ')}\x1B[0m`);
+
+    return { tools: filteredToolsList };
   }
 
-  const namespacedTools = Object.entries(toolsPerServer).flatMap(([endServerId, tools]) =>
-    tools.map((tool) => ({
-      ...tool,
-      name: `${tool.name}_${serverIdToNamespace[endServerId]}_nxs`,
-      description: `${tool.description || ""}${tool.description ? " " : ""}(End Server: ${
-        endServers[endServerId].name
-      })`
-    }))
-  );
+  // Default mode: Only show auto_select_tool to force intelligent routing
+  console.log(`\x1B[96m[Tools] 🤖 Showing only auto_select_tool (forcing intelligent routing)\x1B[0m`);
 
-  const allTools = [...customTools, ...namespacedTools];
-  console.log(`\x1B[92m[Tools] ✅ Returning ${allTools.length} tools total:\x1B[0m`);
-  console.log(`\x1B[90m[Tools]   - ${customTools.length} custom tools: ${customTools.map(t => t.name).join(', ')}\x1B[0m`);
-  if (namespacedTools.length > 0) {
-    console.log(`\x1B[90m[Tools]   - ${namespacedTools.length} end server tools: ${namespacedTools.slice(0, 5).map(t => t.name).join(', ')}${namespacedTools.length > 5 ? '...' : ''}\x1B[0m`);
-  }
-  
-  const response = { tools: allTools };
-  console.log(`\x1B[90m[Tools] Response: ${JSON.stringify(response).substring(0, 300)}...\x1B[0m`);
-  return response;
+  const minimalTools = customTools.filter(t => t.name === 'auto_select_tool' || t.name === 'list-end-servers' || t.name === 'list-server-status');
+  console.log(`\x1B[92m[Tools] ✅ Returning ${minimalTools.length} tools (intelligent routing mode):\x1B[0m`);
+  console.log(`\x1B[90m[Tools]   - ${minimalTools.map(t => t.name).join(', ')}\x1B[0m`);
+
+  return { tools: minimalTools };
 });
 
 proxyMCPServer.setRequestHandler(CallToolRequestSchema, async (request) => {
   console.log(`\x1B[94m[Tool Call] 🔧 Client requested: ${request.params.name}\x1B[0m`);
 
+  // Special handling for auto_select_tool
+  if (request.params.name === "auto_select_tool") {
+    if (!toolRouter) {
+      return {
+        content: [{ type: "text", text: "Tool router not initialized. Server may be starting up." }],
+        isError: true
+      };
+    }
+
+    try {
+      const intent = request.params.arguments?.intent as string;
+      const args = request.params.arguments?.args as Record<string, unknown> | undefined;
+      const explicitIntent = request.params.arguments?._intent as string | undefined;
+
+      if (!intent) {
+        return {
+          content: [{ type: "text", text: "Missing required argument: intent" }],
+          isError: true
+        };
+      }
+
+      console.log(`\x1B[90m[Auto-Select] Routing query: "${intent}"\x1B[0m`);
+
+      // Set query context for potential tool list filtering
+      lastQueryIntent = intent;
+      lastQueryTimestamp = Date.now();
+
+      const result = await toolRouter.route({ userQuery: intent, _intent: explicitIntent });
+
+      console.log(`\x1B[92m[Auto-Select] Selected: ${result.selectedTool} (confidence: ${result.confidence})\x1B[0m`);
+      console.log(`\x1B[90m[Auto-Select] Reason: ${result.reason}\x1B[0m`);
+
+      // Now execute the selected tool
+      if (result.selectedTool.endsWith("_nxs")) {
+        const { nexusId, toolName } = parseNamespacedToolName(result.selectedTool);
+        const endServerId = namespaceToServerId[nexusId];
+
+        console.log(`\x1B[90m[Auto-Select] Executing ${toolName} on ${endServers[endServerId].name}\x1B[0m`);
+
+        // If no args provided, try to extract from intent (basic heuristic)
+        let finalArgs = args || {};
+        if (!args || Object.keys(args).length === 0) {
+          // Try to extract search query from intent
+          if (toolName.includes('search')) {
+            // Extract meaningful keywords from intent
+            const keywords = intent.split(' ').filter(w =>
+              !['find', 'my', 'the', 'a', 'an', 'about', 'for', 'in', 'on', 'with'].includes(w.toLowerCase())
+            );
+            finalArgs = { q: keywords.join(' ') };
+            console.log(`\x1B[90m[Auto-Select] Extracted args from intent: ${JSON.stringify(finalArgs)}\x1B[0m`);
+          }
+        }
+
+        const toolResult = await endServers[endServerId].callTool(toolName, {
+          ...request.params,
+          arguments: finalArgs
+        });
+
+        // Add routing metadata to response
+        return {
+          ...toolResult,
+          content: [
+            {
+              type: "text",
+              text: `[Auto-selected: ${result.selectedTool} (${result.confidence} confidence)]\n${result.reason}\n\n`
+            },
+            ...(Array.isArray(toolResult.content) ? toolResult.content : [toolResult.content])
+          ]
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: `Selected tool ${result.selectedTool} but it's not a recognized end server tool` }],
+        isError: true
+      };
+    } catch (error) {
+      console.error(`\x1B[91m[Auto-Select] Error: ${error instanceof Error ? error.message : String(error)}\x1B[0m`);
+      return {
+        content: [{ type: "text", text: `Error in auto_select_tool: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true
+      };
+    }
+  }
+
   const customToolExecutor = customToolExecutors[request.params.name];
-  if (customToolExecutor) {
+  if (customToolExecutor && request.params.name !== "auto_select_tool") {
     console.log(`\x1B[90m[Tool Call] Executing custom tool: ${request.params.name}\x1B[0m`);
     const result = await customToolExecutor();
     console.log(`\x1B[92m[Tool Call] ✅ Custom tool completed: ${request.params.name}\x1B[0m`);
@@ -400,6 +525,19 @@ export async function initializeServer() {
 
   // Start polling for config changes every 30 seconds
   startPolling();
+}
+
+export function setToolRouter(router: ToolRouter) {
+  toolRouter = router;
+  console.log("\x1B[90m[Router] Tool router initialized\x1B[0m");
+}
+
+export function getEndServers(): Record<string, EndServer> {
+  return endServers;
+}
+
+export function getServerIdToNamespace(): Record<string, string> {
+  return serverIdToNamespace;
 }
 
 export function startPolling() {

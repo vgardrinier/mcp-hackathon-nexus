@@ -7,8 +7,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   const navItems = [
-    { href: "/dashboard/servers", label: "MCP Servers", icon: "🔌" },
-    { href: "/dashboard/clients", label: "MCP Clients", icon: "🤖" }
+    { href: "/dashboard/servers", label: "MCP Servers", icon: "🔌" }
   ];
 
   return (

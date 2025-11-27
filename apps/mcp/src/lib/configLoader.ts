@@ -113,7 +113,7 @@ function includeRepoSource(sources: SourceConfig[], baseDir: string): SourceConf
   const repoPath = resolve(baseDir, ".");
   const hasRepoSource = sources.some((source) => resolveSourcePath(source, baseDir) === repoPath);
   if (hasRepoSource) return sources;
-  return [{ path: ".", category: "official" }, ...sources];
+  return [{ path: ".", category: "official", optional: false }, ...sources];
 }
 
 function resolveConfigPath(): { configPath: string; configDir: string } {

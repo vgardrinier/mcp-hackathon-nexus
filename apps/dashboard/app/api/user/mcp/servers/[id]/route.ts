@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { getLocalUser, getServerById, installServer, uninstallServer } from "@/lib/localData";
+import { getServerConfig } from "@/lib/yamlConfig";
 
-export async function POST(
+export async function GET(
   _req: Request,
   context: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const userId = getLocalUser().id;
     const params = context.params;
     const resolvedParams = params instanceof Promise ? await params : params;
     const serverId = resolvedParams.id;
@@ -15,38 +14,18 @@ export async function POST(
       return NextResponse.json({ error: "Missing server ID" }, { status: 400 });
     }
 
-    const server = getServerById(serverId);
+    const server = getServerConfig(serverId);
     if (!server) {
       return NextResponse.json({ error: "Server not found" }, { status: 404 });
     }
 
-    installServer(userId, serverId);
-    return NextResponse.json({ success: true }, { status: 200 });
+    return NextResponse.json(server, { status: 200 });
   } catch (error) {
-    console.error("Error in POST /api/user/mcp/servers/[id]:", error);
+    console.error("Error in GET /api/user/mcp/servers/[id]:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
-export async function DELETE(
-  _req: Request,
-  context: { params: Promise<{ id: string }> | { id: string } }
-) {
-  try {
-    const userId = getLocalUser().id;
-    const params = context.params;
-    const resolvedParams = params instanceof Promise ? await params : params;
-    const serverId = resolvedParams.id;
-
-    if (!serverId) {
-      return NextResponse.json({ error: "Missing server ID" }, { status: 400 });
-    }
-
-    uninstallServer(userId, serverId);
-    return NextResponse.json({ success: true }, { status: 200 });
-  } catch (error) {
-    console.error("Error in DELETE /api/user/mcp/servers/[id]:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
-
+// Note: We removed POST (install) and DELETE (uninstall) since all servers
+// in ~/.config/nexus are already "installed" and available.
+// Users just configure them instead.
