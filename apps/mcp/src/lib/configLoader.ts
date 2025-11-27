@@ -211,10 +211,18 @@ function buildTransportConfig(
       return acc;
     }, {});
 
+    // Substitute ${ENV_VAR} in args with actual values from envVars
+    const substitutedArgs = (config.args ?? []).map(arg => {
+      return arg.replace(/\$\{([^}]+)\}/g, (_, envKey) => {
+        const envVar = envVars.find(v => v.key === envKey);
+        return envVar?.value ?? arg;
+      });
+    });
+
     return {
       transport: EndServerTransportType.STDIO,
       command: config.command,
-      args: config.args ?? [],
+      args: substitutedArgs,
       env: { ...(config.env ?? {}), ...envFromVars }
     };
   }

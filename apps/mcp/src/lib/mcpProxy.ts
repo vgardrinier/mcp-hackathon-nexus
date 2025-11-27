@@ -155,8 +155,8 @@ const customTools: Tool[] = [
     }
   },
   {
-    name: "auto_select_tool",
-    description: "**PRIMARY TOOL**: Use this to access GitHub, Linear, Supabase, and all other integrated services. Automatically routes your request to the correct tool. Pass your intent as natural language (e.g., 'list my supabase projects', 'get github PRs', 'show linear issues').",
+    name: "nexus_init",
+    description: "**PRIMARY TOOL**: Use this to access GitHub, Linear, Supabase, and all other integrated services. Nexus automatically routes your request to the correct tool. Pass your intent as natural language (e.g., 'list my supabase projects', 'get github PRs', 'show linear issues').",
     inputSchema: {
       type: "object",
       properties: {
@@ -280,10 +280,10 @@ proxyMCPServer.setRequestHandler(ListToolsRequestSchema, async () => {
     return { tools: filteredToolsList };
   }
 
-  // Default mode: Only show auto_select_tool to force intelligent routing
-  console.log(`\x1B[96m[Tools] 🤖 Showing only auto_select_tool (forcing intelligent routing)\x1B[0m`);
+  // Default mode: Only show nexus_init to force intelligent routing
+  console.log(`\x1B[96m[Tools] 🤖 Showing only nexus_init (forcing intelligent routing)\x1B[0m`);
 
-  const minimalTools = customTools.filter(t => t.name === 'auto_select_tool' || t.name === 'list-end-servers' || t.name === 'list-server-status');
+  const minimalTools = customTools.filter(t => t.name === 'nexus_init' || t.name === 'list-end-servers' || t.name === 'list-server-status');
   console.log(`\x1B[92m[Tools] ✅ Returning ${minimalTools.length} tools (intelligent routing mode):\x1B[0m`);
   console.log(`\x1B[90m[Tools]   - ${minimalTools.map(t => t.name).join(', ')}\x1B[0m`);
 
@@ -293,8 +293,8 @@ proxyMCPServer.setRequestHandler(ListToolsRequestSchema, async () => {
 proxyMCPServer.setRequestHandler(CallToolRequestSchema, async (request) => {
   console.log(`\x1B[94m[Tool Call] 🔧 Client requested: ${request.params.name}\x1B[0m`);
 
-  // Special handling for auto_select_tool
-  if (request.params.name === "auto_select_tool") {
+  // Special handling for nexus_init
+  if (request.params.name === "nexus_init") {
     if (!toolRouter) {
       return {
         content: [{ type: "text", text: "Tool router not initialized. Server may be starting up." }],
@@ -378,7 +378,7 @@ proxyMCPServer.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 
   const customToolExecutor = customToolExecutors[request.params.name];
-  if (customToolExecutor && request.params.name !== "auto_select_tool") {
+  if (customToolExecutor && request.params.name !== "nexus_init") {
     console.log(`\x1B[90m[Tool Call] Executing custom tool: ${request.params.name}\x1B[0m`);
     const result = await customToolExecutor();
     console.log(`\x1B[92m[Tool Call] ✅ Custom tool completed: ${request.params.name}\x1B[0m`);
