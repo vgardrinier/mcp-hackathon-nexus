@@ -133,15 +133,20 @@ logoUrl: https://supabase.com/favicon/favicon-32x32.png
 requiresAuth: true
 
 env:
-  - key: PROJECT_REF
-    name: Supabase Project Reference
-    description: Your project ref (optional, for scoping to specific project)
-    required: false
-    valueFromEnv: SUPABASE_PROJECT_REF
+  - key: SUPABASE_ACCESS_TOKEN
+    name: Supabase Personal Access Token
+    description: Create a PAT in your Supabase account settings
+    required: true
+    valueFromEnv: SUPABASE_ACCESS_TOKEN
 
 config:
-  transport: http
-  url: https://mcp.supabase.com/mcp
+  transport: stdio
+  command: npx
+  args:
+    - "-y"
+    - "@supabase/mcp-server-supabase"
+    - "--access-token"
+    - "${SUPABASE_ACCESS_TOKEN}"
 EOF
 
 echo -e "${GREEN}✓${NC} Created server configs in $CONFIG_DIR"
