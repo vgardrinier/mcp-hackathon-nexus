@@ -133,6 +133,7 @@ fi
 
 # Test 4: Containers running
 echo "  • Testing containers..."
+cd ~/.nexus/repo
 RUNNING_CONTAINERS=$(docker compose ps --filter "status=running" --format "{{.Service}}" | wc -l)
 if [ "$RUNNING_CONTAINERS" -ge 2 ]; then
     echo "    ✓ Both containers running"
@@ -141,11 +142,14 @@ else
     docker compose ps
     TEST_PASSED=false
 fi
+cd /tmp/nexus-test
 
 # Cleanup test
 echo ""
 echo "🧹 Cleaning up test environment..."
+cd ~/.nexus/repo
 docker compose down -v 2>/dev/null || true
+cd /tmp/nexus-test
 rm -rf ~/.nexus ~/.config/nexus
 
 # Restore original state
