@@ -156,13 +156,13 @@ const customTools: Tool[] = [
   },
   {
     name: "auto_select_tool",
-    description: "Automatically selects and executes the best tool for a given natural language intent. Use this when you're unsure which specific tool to call.",
+    description: "**PRIMARY TOOL**: Use this to access GitHub, Linear, Supabase, and all other integrated services. Automatically routes your request to the correct tool. Pass your intent as natural language (e.g., 'list my supabase projects', 'get github PRs', 'show linear issues').",
     inputSchema: {
       type: "object",
       properties: {
         intent: {
           type: "string",
-          description: "Natural language description of what you want to accomplish (e.g., 'search for code', 'get last pull requests')"
+          description: "Natural language description of what you want to accomplish (e.g., 'list my supabase projects', 'get last pull requests', 'search for code')"
         },
         args: {
           type: "object",
