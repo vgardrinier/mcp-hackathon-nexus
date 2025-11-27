@@ -64,6 +64,7 @@ echo ""
 echo -e "${BLUE}Setting up Nexus configuration...${NC}"
 mkdir -p "$CONFIG_DIR/servers/custom/github"
 mkdir -p "$CONFIG_DIR/servers/custom/linear"
+mkdir -p "$CONFIG_DIR/servers/custom/supabase"
 
 # Create GitHub server config
 cat > "$CONFIG_DIR/servers/custom/github/config.yml" <<'EOF'
@@ -118,6 +119,34 @@ config:
   args:
     - "-y"
     - "@mseep/linear-mcp"
+EOF
+
+# Create Supabase server config
+cat > "$CONFIG_DIR/servers/custom/supabase/config.yml" <<'EOF'
+id: supabase-mcp-server
+name: Supabase
+description: Manage Supabase projects, database, auth, and storage
+sourceUrl: https://github.com/supabase-community/supabase-mcp
+category: official
+logoUrl: https://supabase.com/favicon/favicon-32x32.png
+
+requiresAuth: true
+
+env:
+  - key: SUPABASE_ACCESS_TOKEN
+    name: Supabase Personal Access Token
+    description: Create a PAT in your Supabase account settings
+    required: true
+    valueFromEnv: SUPABASE_ACCESS_TOKEN
+
+config:
+  transport: stdio
+  command: npx
+  args:
+    - "-y"
+    - "@supabase/mcp-server-supabase"
+    - "--access-token"
+    - "${SUPABASE_ACCESS_TOKEN}"
 EOF
 
 echo -e "${GREEN}✓${NC} Created server configs in $CONFIG_DIR"

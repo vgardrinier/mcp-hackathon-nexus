@@ -261,7 +261,7 @@ export default function ServerDetailPage() {
     }
   };
 
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <div style={{ padding: "2rem" }}>
         <p>Loading...</p>

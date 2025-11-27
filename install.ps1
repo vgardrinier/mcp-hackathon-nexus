@@ -51,6 +51,7 @@ Write-Output ""
 Write-ColorOutput Blue "Setting up Nexus configuration..."
 New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\github") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\linear") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\supabase") | Out-Null
 
 # Create GitHub server config
 $GithubConfig = @"
@@ -108,6 +109,35 @@ config:
     - "@mseep/linear-mcp"
 "@
 $LinearConfig | Out-File -FilePath (Join-Path $ConfigDir "servers\custom\linear\config.yml") -Encoding UTF8
+
+# Create Supabase server config
+$SupabaseConfig = @"
+id: supabase-mcp-server
+name: Supabase
+description: Manage Supabase projects, database, auth, and storage
+sourceUrl: https://github.com/supabase-community/supabase-mcp
+category: official
+logoUrl: https://supabase.com/favicon/favicon-32x32.png
+
+requiresAuth: true
+
+env:
+  - key: SUPABASE_ACCESS_TOKEN
+    name: Supabase Personal Access Token
+    description: Create a PAT in your Supabase account settings
+    required: true
+    valueFromEnv: SUPABASE_ACCESS_TOKEN
+
+config:
+  transport: stdio
+  command: npx
+  args:
+    - "-y"
+    - "@supabase/mcp-server-supabase"
+    - "--access-token"
+    - "`${SUPABASE_ACCESS_TOKEN}"
+"@
+$SupabaseConfig | Out-File -FilePath (Join-Path $ConfigDir "servers\custom\supabase\config.yml") -Encoding UTF8
 
 Write-ColorOutput Green "✓ Created server configs in $ConfigDir"
 
