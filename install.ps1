@@ -53,6 +53,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\
 New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\linear") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\supabase") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\firecrawl") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\notion") | Out-Null
 
 # Create GitHub server config
 $GithubConfig = @"
@@ -166,6 +167,33 @@ config:
     - "firecrawl-mcp"
 "@
 $FirecrawlConfig | Out-File -FilePath (Join-Path $ConfigDir "servers\custom\firecrawl\config.yml") -Encoding UTF8
+
+# Create Notion server config
+$NotionConfig = @"
+id: notion-mcp-server
+name: Notion
+description: Read and write to Notion pages and databases
+sourceUrl: https://github.com/makenotion/notion-mcp-server
+category: official
+logoUrl: https://www.notion.so/images/favicon.ico
+
+requiresAuth: true
+
+env:
+  - key: NOTION_TOKEN
+    name: Notion Integration Token
+    description: Create an integration at https://www.notion.so/profile/integrations
+    required: true
+    valueFromEnv: NOTION_TOKEN
+
+config:
+  transport: stdio
+  command: npx
+  args:
+    - "-y"
+    - "@notionhq/notion-mcp-server"
+"@
+$NotionConfig | Out-File -FilePath (Join-Path $ConfigDir "servers\custom\notion\config.yml") -Encoding UTF8
 
 Write-ColorOutput Green "✓ Created server configs in $ConfigDir"
 

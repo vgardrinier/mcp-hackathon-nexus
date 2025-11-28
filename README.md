@@ -57,6 +57,7 @@ That's it! Docker handles all dependencies internally.
 Ships with:
 - **GitHub** - Repos, issues, PRs, code search
 - **Linear** - Issues, projects, teams
+- **Notion** - Read and write Notion pages and databases
 - **Supabase** - Database, auth, storage management
 - **Firecrawl** - Web scraping and crawling with AI extraction
 

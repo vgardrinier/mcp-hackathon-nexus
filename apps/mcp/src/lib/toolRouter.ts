@@ -28,6 +28,8 @@ export class ToolRouter {
    */
   async route(request: ToolRoutingRequest): Promise<ToolRoutingResult> {
     // Step A: Check for explicit intent
+    let serverFilter: string | undefined;
+
     if (request._intent) {
       const explicit = this.handleExplicitIntent(request._intent);
       if (explicit) {
@@ -37,14 +39,17 @@ export class ToolRouter {
           reason: "Explicit tool name provided"
         };
       }
+
+      // Check if _intent is a server name for filtering
+      serverFilter = this.getServerFilter(request._intent);
     }
 
-    // Step B: Fast keyword match
-    const keywordMatches = this.matchByKeywords(request.userQuery);
+    // Step B: Fast keyword match (with optional server filter)
+    const keywordMatches = this.matchByKeywords(request.userQuery, serverFilter);
 
     if (keywordMatches.length === 0) {
       throw new Error(
-        `No matching tools found for query: "${request.userQuery}"`
+        `No matching tools found for query: "${request.userQuery}"${serverFilter ? ` in server: ${serverFilter}` : ''}`
       );
     }
 
@@ -103,7 +108,23 @@ export class ToolRouter {
   }
 
   /**
+   * Check if intent is a server name and return it for filtering
+   */
+  private getServerFilter(intent: string): string | undefined {
+    const normalizedIntent = intent.toLowerCase();
+
+    for (const metadata of this.toolIndex.byName.values()) {
+      if (metadata.serverName.toLowerCase() === normalizedIntent) {
+        return metadata.serverName;
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
    * Step A: Handle explicit tool intent
+   * Supports tool names only (server names handled via filtering)
    */
   private handleExplicitIntent(intent: string): string | null {
     // Check if it's a valid namespaced tool name
@@ -123,9 +144,12 @@ export class ToolRouter {
 
   /**
    * Step B: Fast keyword matching with scoring
+   * @param query - User query
+   * @param serverFilter - Optional server name to filter results
    */
   private matchByKeywords(
-    query: string
+    query: string,
+    serverFilter?: string
   ): Array<ToolMetadata & { score: number; nameKeywordHits: number; exactMatch: boolean }> {
     let queryKeywords = normalizeQuery(query);
 
@@ -143,6 +167,14 @@ export class ToolRouter {
       const matchingTools = this.toolIndex.byKeyword.get(keyword) || [];
 
       for (const toolName of matchingTools) {
+        // Apply server filter if provided
+        if (serverFilter) {
+          const metadata = this.toolIndex.byName.get(toolName);
+          if (metadata && metadata.serverName !== serverFilter) {
+            continue; // Skip tools not from the specified server
+          }
+        }
+
         if (!scores.has(toolName)) {
           scores.set(toolName, { score: 0, nameKeywordHits: 0, exactMatch: false });
         }

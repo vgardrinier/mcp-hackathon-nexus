@@ -66,6 +66,7 @@ mkdir -p "$CONFIG_DIR/servers/custom/github"
 mkdir -p "$CONFIG_DIR/servers/custom/linear"
 mkdir -p "$CONFIG_DIR/servers/custom/supabase"
 mkdir -p "$CONFIG_DIR/servers/custom/firecrawl"
+mkdir -p "$CONFIG_DIR/servers/custom/notion"
 
 # Create GitHub server config
 cat > "$CONFIG_DIR/servers/custom/github/config.yml" <<'EOF'
@@ -174,6 +175,32 @@ config:
   args:
     - "-y"
     - "firecrawl-mcp"
+EOF
+
+# Create Notion server config
+cat > "$CONFIG_DIR/servers/custom/notion/config.yml" <<'EOF'
+id: notion-mcp-server
+name: Notion
+description: Read and write to Notion pages and databases
+sourceUrl: https://github.com/makenotion/notion-mcp-server
+category: official
+logoUrl: https://www.notion.so/images/favicon.ico
+
+requiresAuth: true
+
+env:
+  - key: NOTION_TOKEN
+    name: Notion Integration Token
+    description: Create an integration at https://www.notion.so/profile/integrations
+    required: true
+    valueFromEnv: NOTION_TOKEN
+
+config:
+  transport: stdio
+  command: npx
+  args:
+    - "-y"
+    - "@notionhq/notion-mcp-server"
 EOF
 
 echo -e "${GREEN}✓${NC} Created server configs in $CONFIG_DIR"
