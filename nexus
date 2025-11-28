@@ -75,6 +75,11 @@ get_action_emoji() {
         create|add) echo "✍️ " ;;
         update|edit|modify) echo "✏️ " ;;
         delete|remove) echo "🗑️ " ;;
+        scrape|crawl) echo "🕷️ " ;;
+        map) echo "🗺️ " ;;
+        extract) echo "🔬" ;;
+        check) echo "✅" ;;
+        batch) echo "📦" ;;
         *) echo "🔧" ;;
     esac
 }

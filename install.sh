@@ -65,6 +65,7 @@ echo -e "${BLUE}Setting up Nexus configuration...${NC}"
 mkdir -p "$CONFIG_DIR/servers/custom/github"
 mkdir -p "$CONFIG_DIR/servers/custom/linear"
 mkdir -p "$CONFIG_DIR/servers/custom/supabase"
+mkdir -p "$CONFIG_DIR/servers/custom/firecrawl"
 
 # Create GitHub server config
 cat > "$CONFIG_DIR/servers/custom/github/config.yml" <<'EOF'
@@ -147,6 +148,32 @@ config:
     - "@supabase/mcp-server-supabase"
     - "--access-token"
     - "${SUPABASE_ACCESS_TOKEN}"
+EOF
+
+# Create Firecrawl server config
+cat > "$CONFIG_DIR/servers/custom/firecrawl/config.yml" <<'EOF'
+id: firecrawl-mcp-server
+name: Firecrawl
+description: Web scraping and crawling with AI-powered extraction
+sourceUrl: https://docs.firecrawl.dev/mcp-server
+category: official
+logoUrl: https://www.firecrawl.dev/favicon.ico
+
+requiresAuth: true
+
+env:
+  - key: FIRECRAWL_API_KEY
+    name: Firecrawl API Key
+    description: Get your API key from https://www.firecrawl.dev/app/api-keys
+    required: true
+    valueFromEnv: FIRECRAWL_API_KEY
+
+config:
+  transport: stdio
+  command: npx
+  args:
+    - "-y"
+    - "firecrawl-mcp"
 EOF
 
 echo -e "${GREEN}✓${NC} Created server configs in $CONFIG_DIR"

@@ -28,7 +28,7 @@ irm https://raw.githubusercontent.com/vgardrinier/mcp-hackathon-nexus/master/ins
 The install script will:
 1. Check if Docker is installed and running
 2. Set up config directories (`~/.config/nexus/`)
-3. Create default server configs (GitHub, Linear, Supabase)
+3. Create default server configs (e.g. GitHub, Linear, Firecrawl...)
 4. Clone repo and start services with Docker
 5. Print Cursor config JSON ready to copy-paste
 
@@ -57,6 +57,8 @@ That's it! Docker handles all dependencies internally.
 Ships with:
 - **GitHub** - Repos, issues, PRs, code search
 - **Linear** - Issues, projects, teams
+- **Supabase** - Database, auth, storage management
+- **Firecrawl** - Web scraping and crawling with AI extraction
 
 Nexus supports any MCP server using STDIO transport. Add more servers by dropping config files in `~/.config/nexus/servers/custom/`.
 

@@ -52,6 +52,7 @@ Write-ColorOutput Blue "Setting up Nexus configuration..."
 New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\github") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\linear") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\supabase") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\firecrawl") | Out-Null
 
 # Create GitHub server config
 $GithubConfig = @"
@@ -138,6 +139,33 @@ config:
     - "`${SUPABASE_ACCESS_TOKEN}"
 "@
 $SupabaseConfig | Out-File -FilePath (Join-Path $ConfigDir "servers\custom\supabase\config.yml") -Encoding UTF8
+
+# Create Firecrawl server config
+$FirecrawlConfig = @"
+id: firecrawl-mcp-server
+name: Firecrawl
+description: Web scraping and crawling with AI-powered extraction
+sourceUrl: https://docs.firecrawl.dev/mcp-server
+category: official
+logoUrl: https://www.firecrawl.dev/favicon.ico
+
+requiresAuth: true
+
+env:
+  - key: FIRECRAWL_API_KEY
+    name: Firecrawl API Key
+    description: Get your API key from https://www.firecrawl.dev/app/api-keys
+    required: true
+    valueFromEnv: FIRECRAWL_API_KEY
+
+config:
+  transport: stdio
+  command: npx
+  args:
+    - "-y"
+    - "firecrawl-mcp"
+"@
+$FirecrawlConfig | Out-File -FilePath (Join-Path $ConfigDir "servers\custom\firecrawl\config.yml") -Encoding UTF8
 
 Write-ColorOutput Green "✓ Created server configs in $ConfigDir"
 
