@@ -20,6 +20,18 @@ export interface ToolRoutingResult {
  * C. LLM resolver (ambiguous)
  * D. Cache result
  */
+/**
+ * Server hint keywords for domain-specific routing
+ * These keywords strongly suggest which server to use
+ */
+const SERVER_HINTS: Record<string, string[]> = {
+  "GitHub": ["repo", "repository", "pull", "merge", "branch", "commit", "fork", "clone"],
+  "Linear": ["ticket", "cycle", "sprint", "assignee", "priority", "backlog"],
+  "Notion": ["page", "database", "block", "workspace"],
+  "Firecrawl": ["scrape", "crawl", "extract", "website", "url", "html"],
+  "Supabase": ["database", "table", "row", "auth", "storage", "bucket"]
+};
+
 export class ToolRouter {
   constructor(private toolIndex: ToolIndex) {}
 
@@ -66,6 +78,14 @@ export class ToolRouter {
     const secondMatch = keywordMatches[1];
     const topScore = topMatch.score;
     const secondScore = secondMatch?.score || 0;
+
+    // Debug logging for ambiguous routing
+    if (keywordMatches.length > 1) {
+      console.log(`\x1B[93m[ToolRouter] Top 3 matches for "${request.userQuery}":\x1B[0m`);
+      keywordMatches.slice(0, 3).forEach((match, i) => {
+        console.log(`  ${i + 1}. ${match.serverName}:${match.name} (score: ${match.score}, nameHits: ${match.nameKeywordHits})`);
+      });
+    }
 
     // High confidence if:
     // 1. Top match has 2x the score of second best, OR
@@ -160,6 +180,22 @@ export class ToolRouter {
     // Expand query with synonyms
     queryKeywords = expandQuery(queryKeywords);
 
+    // Check for server hints to boost relevant servers
+    const queryLower = query.toLowerCase();
+    const serverBoosts = new Map<string, number>();
+
+    for (const [serverName, hints] of Object.entries(SERVER_HINTS)) {
+      for (const hint of hints) {
+        if (queryLower.includes(hint)) {
+          serverBoosts.set(serverName, (serverBoosts.get(serverName) || 0) + 5);
+        }
+      }
+    }
+
+    if (serverBoosts.size > 0) {
+      console.log(`\x1B[96m[ToolRouter] Server hints detected: ${Array.from(serverBoosts.entries()).map(([s, b]) => `${s}(+${b})`).join(', ')}\x1B[0m`);
+    }
+
     // Score each tool based on keyword matches
     const scores = new Map<string, { score: number; nameKeywordHits: number; exactMatch: boolean }>();
 
@@ -212,16 +248,24 @@ export class ToolRouter {
       }
     }
 
-    // Convert to array with metadata and sort with tie-breakers
+    // Convert to array with metadata and apply server boosts
     const results = Array.from(scores.entries())
       .map(([namespacedName, scoreData]) => {
         const metadata = this.toolIndex.byName.get(namespacedName);
         if (!metadata) {
           throw new Error(`Tool metadata not found: ${namespacedName}`);
         }
+
+        // Apply server hint boost if applicable
+        let finalScore = scoreData.score;
+        const serverBoost = serverBoosts.get(metadata.serverName);
+        if (serverBoost) {
+          finalScore += serverBoost;
+        }
+
         return {
           ...metadata,
-          score: scoreData.score,
+          score: finalScore,
           nameKeywordHits: scoreData.nameKeywordHits,
           exactMatch: scoreData.exactMatch
         };
