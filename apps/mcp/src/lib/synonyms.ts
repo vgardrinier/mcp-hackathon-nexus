@@ -6,10 +6,13 @@
  */
 
 export const SYNONYMS: Record<string, string[]> = {
-  // GitHub/Git terms (include uppercase variants)
-  pr: ["pull", "request", "pull_request", "pullrequest", "review", "merge"],
-  PR: ["pull", "request", "pull_request", "pullrequest", "review", "merge"],
+  // GitHub/Git terms (include uppercase variants and plurals)
+  pr: ["pull", "request", "pull_request", "pullrequest", "review", "merge", "pull_request"],
+  PR: ["pull", "request", "pull_request", "pullrequest", "review", "merge", "pull_request"],
+  prs: ["pull", "request", "pull_request", "pullrequest", "review", "merge", "pull_requests"],
+  PRs: ["pull", "request", "pull_request", "pullrequest", "review", "merge", "pull_requests"],
   "pull request": ["pr", "PR", "merge", "review", "pull_request", "code", "changes"],
+  "pull requests": ["prs", "PRs", "merge", "review", "pull_request", "code", "changes"],
   "merge request": ["pr", "PR", "pull", "request", "pull_request", "review"],
   review: ["pr", "PR", "pull", "request", "code", "review", "pull_request", "changes", "diff"],
   "code review": ["pr", "PR", "pull", "request", "review", "pull_request", "changes"],
@@ -25,9 +28,10 @@ export const SYNONYMS: Record<string, string[]> = {
   contents: ["content", "file", "data"],
 
   // Issue tracking
-  ticket: ["issue", "task", "bug", "item"],
-  issue: ["ticket", "task", "bug", "problem", "item"],
-  issues: ["tickets", "tasks", "bugs", "items"],
+  ticket: ["issue", "task", "bug", "item", "search"],
+  tickets: ["issues", "tasks", "bugs", "items", "search"],
+  issue: ["ticket", "task", "bug", "problem", "item", "search"],
+  issues: ["tickets", "tasks", "bugs", "items", "search"],
   task: ["issue", "ticket", "item", "todo", "work"],
   bug: ["issue", "problem", "error", "defect"],
 
@@ -54,7 +58,7 @@ export const SYNONYMS: Record<string, string[]> = {
   add: ["create", "new", "insert", "make"],
   search: ["find", "query", "look", "lookup", "locate"],
   find: ["search", "query", "look", "lookup", "locate", "get"],
-  list: ["show", "display", "get", "fetch", "retrieve"],
+  list: ["show", "display", "get", "fetch", "retrieve", "search"],
   show: ["list", "display", "get", "view"],
   get: ["fetch", "retrieve", "show", "find", "list"],
   fetch: ["get", "retrieve", "load", "pull"],

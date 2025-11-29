@@ -327,6 +327,30 @@ proxyMCPServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       console.log(`\x1B[92m[Auto-Select] Selected: ${result.selectedTool} (confidence: ${result.confidence})\x1B[0m`);
       console.log(`\x1B[90m[Auto-Select] Reason: ${result.reason}\x1B[0m`);
 
+      // Handle ambiguous routing - return candidates for outer LLM to resolve
+      if (result.needsClarification && result.candidates) {
+        const candidateList = result.candidates
+          .map((c) => `• **${c.server}**: \`${c.tool}\` - ${c.description || 'No description'}`)
+          .join("\n");
+        
+        // Format message so the outer LLM (Cursor's Claude) can resolve it
+        const clarificationMessage = `🔀 **Ambiguous Request**
+
+I found multiple services that could handle "${intent}":
+
+${candidateList}
+
+**To proceed**, please specify which service you meant by including its name:
+${result.candidates.slice(0, 3).map(c => `• "${intent.toLowerCase().includes(c.server.toLowerCase()) ? intent : `${c.server.toLowerCase()} ${intent}`}"`).join("\n")}
+
+Or use the exact tool name: \`${result.candidates[0].tool}\``;
+
+        return {
+          content: [{ type: "text", text: clarificationMessage }],
+          isError: false
+        };
+      }
+
       // Now execute the selected tool
       if (result.selectedTool.endsWith("_nxs")) {
         const { nexusId, toolName } = parseNamespacedToolName(result.selectedTool);
@@ -366,12 +390,16 @@ proxyMCPServer.setRequestHandler(CallToolRequestSchema, async (request) => {
           // Log completion
           await logHandle.complete(toolResult);
 
+          // Build clean header - minimal, just shows what was called
+          const serverName = endServer.name;
+          const header = `✅ **${serverName}** → \`${toolName}\``;
+
           return {
             ...toolResult,
             content: [
               {
                 type: "text",
-                text: `[Auto-selected: ${result.selectedTool} (${result.confidence} confidence)]\n${result.reason}\n\n`
+                text: header
               },
               ...(Array.isArray(toolResult.content) ? toolResult.content : [toolResult.content])
             ]

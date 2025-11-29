@@ -11,6 +11,13 @@ export interface ToolRoutingResult {
   selectedTool: string;
   confidence: "high" | "medium" | "low";
   reason: string;
+  // For medium/low confidence - return candidates for outer LLM to resolve
+  needsClarification?: boolean;
+  candidates?: Array<{
+    tool: string;
+    server: string;
+    description?: string;
+  }>;
 }
 
 /**
@@ -38,6 +45,11 @@ export class ToolRouter {
 
   /**
    * Main routing entry point
+   * 
+   * 3-tier strategy:
+   * - HIGH confidence → Execute immediately
+   * - MEDIUM confidence → Use Haiku LLM to disambiguate
+   * - LOW confidence → Return candidates, ask user to clarify
    */
   async route(request: ToolRoutingRequest): Promise<ToolRoutingResult> {
     // Step A: Check for explicit intent
@@ -111,8 +123,27 @@ export class ToolRouter {
       };
     }
 
-    // Medium confidence if score is decent
+    // Medium confidence - close race, let outer LLM help disambiguate
     if (topScore >= 3) {
+      const topCandidates = keywordMatches.slice(0, 4);
+      const isCrossServer = topMatch.serverName !== secondMatch?.serverName;
+      
+      // If it's a cross-server ambiguity with tight scores, ask for clarification
+      if (isCrossServer && scoreRatio < 1.5) {
+        return {
+          selectedTool: topMatch.namespacedName,
+          confidence: "medium",
+          reason: `Ambiguous between ${topMatch.serverName} and ${secondMatch.serverName}. Please specify.`,
+          needsClarification: true,
+          candidates: topCandidates.map(c => ({
+            tool: c.name,
+            server: c.serverName,
+            description: c.description
+          }))
+        };
+      }
+      
+      // Otherwise just proceed with top match
       return {
         selectedTool: topMatch.namespacedName,
         confidence: "medium",
@@ -120,11 +151,18 @@ export class ToolRouter {
       };
     }
 
-    // Step C: Low confidence - might need LLM resolver
+    // Low confidence - definitely ask for clarification
+    const topCandidates = keywordMatches.slice(0, 4);
     return {
       selectedTool: topMatch.namespacedName,
       confidence: "low",
-      reason: `Weak match among ${keywordMatches.length} candidates (score: ${topScore})`
+      reason: `Multiple possible matches. Please be more specific.`,
+      needsClarification: true,
+      candidates: topCandidates.map(c => ({
+        tool: c.name,
+        server: c.serverName,
+        description: c.description
+      }))
     };
   }
 
@@ -288,22 +326,6 @@ export class ToolRouter {
     return results;
   }
 
-  /**
-   * Step C: LLM-based resolver for ambiguous cases
-   * TODO: Implement when LLM integration is ready
-   */
-  private async resolveWithLLM(
-    query: string,
-    candidates: ToolMetadata[]
-  ): Promise<string> {
-    // Placeholder for LLM resolver
-    // This would call an LLM with a small prompt showing 2-4 candidates
-    // For now, just return the first candidate
-    console.log(
-      `\x1B[93m[ToolRouter] LLM resolver not implemented, using top candidate\x1B[0m`
-    );
-    return candidates[0].namespacedName;
-  }
 
   /**
    * Get all available tools (for debugging/listing)
