@@ -102,10 +102,28 @@ export class ToolRouter {
 
     // High confidence if:
     // 1. Top match has 2x the score of second best, OR
-    // 2. Top match has exact name match, OR
+    // 2. Top match has exact name match AND second doesn't (or is same server), OR
     // 3. Top match has 50% more name keyword hits than second
     const scoreRatio = secondScore > 0 ? topScore / secondScore : Infinity;
     const nameHitAdvantage = topMatch.nameKeywordHits - (secondMatch?.nameKeywordHits || 0);
+    const bothExactMatch = topMatch.exactMatch && secondMatch?.exactMatch;
+    const isCrossServer = topMatch.serverName !== secondMatch?.serverName;
+
+    // If both top matches have exact name match AND are from different servers, it's ambiguous!
+    if (bothExactMatch && isCrossServer) {
+      const topCandidates = keywordMatches.slice(0, 4);
+      return {
+        selectedTool: topMatch.namespacedName,
+        confidence: "medium",
+        reason: `Multiple servers have "${topMatch.name}". Please specify which service.`,
+        needsClarification: true,
+        candidates: topCandidates.map(c => ({
+          tool: c.name,
+          server: c.serverName,
+          description: c.description
+        }))
+      };
+    }
 
     if (
       topMatch.exactMatch ||
