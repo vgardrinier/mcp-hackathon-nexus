@@ -329,21 +329,24 @@ proxyMCPServer.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // Handle ambiguous routing - return candidates for outer LLM to resolve
       if (result.needsClarification && result.candidates) {
+        // Truncate descriptions to keep response concise
+        const truncateDesc = (desc?: string, maxLen = 80) => {
+          if (!desc) return '';
+          const firstLine = desc.split('\n')[0].trim();
+          return firstLine.length > maxLen ? firstLine.slice(0, maxLen) + '...' : firstLine;
+        };
+
         const candidateList = result.candidates
-          .map((c) => `• **${c.server}**: \`${c.tool}\` - ${c.description || 'No description'}`)
+          .slice(0, 4) // Max 4 candidates
+          .map((c) => `• **${c.server}**: \`${c.tool}\`${truncateDesc(c.description) ? ` - ${truncateDesc(c.description)}` : ''}`)
           .join("\n");
         
-        // Format message so the outer LLM (Cursor's Claude) can resolve it
-        const clarificationMessage = `🔀 **Ambiguous Request**
-
-I found multiple services that could handle "${intent}":
+        // Keep clarification message short and actionable
+        const clarificationMessage = `🔀 Which service did you mean?
 
 ${candidateList}
 
-**To proceed**, please specify which service you meant by including its name:
-${result.candidates.slice(0, 3).map(c => `• "${intent.toLowerCase().includes(c.server.toLowerCase()) ? intent : `${c.server.toLowerCase()} ${intent}`}"`).join("\n")}
-
-Or use the exact tool name: \`${result.candidates[0].tool}\``;
+💡 Try: "${result.candidates[0].server.toLowerCase()} ${intent}" or "${result.candidates[1]?.server.toLowerCase() || result.candidates[0].server.toLowerCase()} ${intent}"`;
 
         return {
           content: [{ type: "text", text: clarificationMessage }],
