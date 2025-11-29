@@ -54,6 +54,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\
 New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\supabase") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\firecrawl") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\notion") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "servers\custom\n8n") | Out-Null
 
 # Create GitHub server config
 $GithubConfig = @"
@@ -194,6 +195,40 @@ config:
     - "@notionhq/notion-mcp-server"
 "@
 $NotionConfig | Out-File -FilePath (Join-Path $ConfigDir "servers\custom\notion\config.yml") -Encoding UTF8
+
+# Create n8n server config
+$N8nConfig = @"
+id: n8n-mcp-server
+name: n8n
+description: Automate workflows with n8n - access 543 nodes for integrations, workflows, and automation
+sourceUrl: https://github.com/czlonkowski/n8n-mcp
+category: official
+logoUrl: https://n8n.io/favicon.ico
+
+requiresAuth: false
+
+env:
+  - key: N8N_API_URL
+    name: n8n API URL
+    description: Your n8n instance URL (optional - for workflow management)
+    required: false
+    valueFromEnv: N8N_API_URL
+  - key: N8N_API_KEY
+    name: n8n API Key
+    description: Authentication token for n8n API (optional - for workflow management)
+    required: false
+    valueFromEnv: N8N_API_KEY
+
+config:
+  transport: stdio
+  command: npx
+  args:
+    - "-y"
+    - "n8n-mcp"
+  env:
+    MCP_MODE: stdio
+"@
+$N8nConfig | Out-File -FilePath (Join-Path $ConfigDir "servers\custom\n8n\config.yml") -Encoding UTF8
 
 Write-ColorOutput Green "✓ Created server configs in $ConfigDir"
 

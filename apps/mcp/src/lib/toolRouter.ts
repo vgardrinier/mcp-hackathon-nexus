@@ -29,7 +29,8 @@ const SERVER_HINTS: Record<string, string[]> = {
   "Linear": ["ticket", "cycle", "sprint", "assignee", "priority", "backlog"],
   "Notion": ["page", "database", "block", "workspace"],
   "Firecrawl": ["scrape", "crawl", "extract", "website", "url", "html"],
-  "Supabase": ["database", "table", "row", "auth", "storage", "bucket"]
+  "Supabase": ["database", "table", "row", "auth", "storage", "bucket"],
+  "n8n": ["workflow", "automation", "node", "execution", "trigger", "webhook", "integrate"]
 };
 
 export class ToolRouter {
