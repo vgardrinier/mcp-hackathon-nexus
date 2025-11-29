@@ -10,6 +10,7 @@ import { hasValidEnv, parseNamespacedToolName } from "./mcpUtils.js";
 import { loadConfiguredEndServers } from "./configLoader.js";
 import type { ToolRouter } from "./toolRouter.js";
 import { ActivityLogger } from "./activityLogger.js";
+import { sanitizeIntent, detectInjectionAttempt, checkRateLimit } from "./security.js";
 
 const SERVER_INFO = {
   name: "Nexus L2 MCP",
@@ -305,17 +306,24 @@ proxyMCPServer.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     try {
-      const intent = request.params.arguments?.intent as string;
+      const rawIntent = request.params.arguments?.intent as string;
       const args = request.params.arguments?.args as Record<string, unknown> | undefined;
       const explicitIntent = request.params.arguments?._intent as string | undefined;
 
-      if (!intent) {
+      if (!rawIntent) {
         return {
           content: [{ type: "text", text: "Missing required argument: intent" }],
           isError: true
         };
       }
 
+      // Security: Check for injection attempts
+      if (detectInjectionAttempt(rawIntent)) {
+        console.log(`\x1B[93m[Security] ⚠️ Potential injection detected in: "${rawIntent.slice(0, 100)}..."\x1B[0m`);
+      }
+
+      // Security: Sanitize intent before processing
+      const intent = sanitizeIntent(rawIntent);
       console.log(`\x1B[90m[Auto-Select] Routing query: "${intent}"\x1B[0m`);
 
       // Set query context for potential tool list filtering
@@ -334,6 +342,21 @@ proxyMCPServer.setRequestHandler(CallToolRequestSchema, async (request) => {
         const endServer = endServers[endServerId];
 
         console.log(`\x1B[90m[Auto-Select] Executing ${toolName} on ${endServer.name}\x1B[0m`);
+
+        // Security: Check rate limit before execution
+        const rateLimit = checkRateLimit(toolName);
+        if (!rateLimit.allowed) {
+          const resetInSec = Math.ceil(rateLimit.resetInMs / 1000);
+          console.log(`\x1B[91m[Security] 🚫 Rate limit exceeded for ${toolName}. Reset in ${resetInSec}s\x1B[0m`);
+          return {
+            content: [{ 
+              type: "text", 
+              text: `⚠️ Rate limit exceeded for tool '${toolName}'. Try again in ${resetInSec} seconds.\n\nThis limit helps prevent API quota exhaustion.` 
+            }],
+            isError: true
+          };
+        }
+        console.log(`\x1B[90m[Security] Rate limit OK for ${toolName}: ${rateLimit.remaining} calls remaining\x1B[0m`);
 
         // If no args provided, try to extract from intent (basic heuristic)
         let finalArgs = args || {};
@@ -408,6 +431,20 @@ proxyMCPServer.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { nexusId, toolName } = parseNamespacedToolName(request.params.name);
     const endServerId = namespaceToServerId[nexusId];
     const endServer = endServers[endServerId];
+
+    // Security: Check rate limit before execution
+    const rateLimit = checkRateLimit(toolName);
+    if (!rateLimit.allowed) {
+      const resetInSec = Math.ceil(rateLimit.resetInMs / 1000);
+      console.log(`\x1B[91m[Security] 🚫 Rate limit exceeded for ${toolName}. Reset in ${resetInSec}s\x1B[0m`);
+      return {
+        content: [{ 
+          type: "text", 
+          text: `⚠️ Rate limit exceeded for tool '${toolName}'. Try again in ${resetInSec} seconds.\n\nThis limit helps prevent API quota exhaustion.` 
+        }],
+        isError: true
+      };
+    }
 
     // Log tool call
     const args = (request.params.arguments as Record<string, unknown>) || {};

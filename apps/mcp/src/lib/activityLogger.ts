@@ -95,6 +95,12 @@ export class ActivityLogger {
       "execute",
       "query",
       "find",
+      "scrape",
+      "crawl",
+      "map",
+      "extract",
+      "check",
+      "batch",
     ];
 
     const lowerName = toolName.toLowerCase();
