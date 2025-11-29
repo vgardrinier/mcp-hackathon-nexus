@@ -6,7 +6,7 @@ Nexus runs fully on your machine—nothing ever leaves your device. Get sub-100m
 
 ## Features
 
-- 🔒 **100% Local** - Docker-based or native mode, your data never leaves your machine
+- 🔒 **100% Local** - Docker-based your data & tokens never leaves your machine
 - ⚡ **Fast** - Sub-100ms latency vs cloud MCP routing (5-10 seconds)
 - 💰 **Token Efficient** - 91.8% lower token usage through smart tool filtering
 - 🔍 **Transparent** - Full logs of every tool call and response
@@ -59,6 +59,7 @@ Ships with:
 - **Linear** - Issues, projects, teams
 - **Supabase** - Database, auth, storage management
 - **Firecrawl** - Web scraping and crawling with AI extraction
+... and many more
 
 Nexus supports any MCP server using STDIO transport. Add more servers by dropping config files in `~/.config/nexus/servers/custom/`.
 
@@ -151,30 +152,6 @@ Server configs live in:
 - **Mac/Linux**: `~/.config/nexus/servers/custom/`
 - **Windows**: `%APPDATA%\nexus\servers\custom\`
 
-Each server has a `config.yml` file. Edit directly or use the dashboard.
-
-## Why Nexus?
-
-**Privacy**: Your code and data never leave your machine. No cloud MCP routing, no third-party servers.
-
-**Speed**: Direct local communication means sub-100ms latency instead of cloud routing's 5-10 seconds.
-
-**Cost**: 91.8% fewer tokens through intelligent tool filtering. Only sends relevant tools to Cursor instead of exposing all tools.
-
-**Transparency**: See exactly what tools are being called and what data they access.
-
-## How Smart Filtering Works
-
-Traditional MCP setup: Cursor receives all 60+ tools on every request → high token usage
-
-Nexus approach:
-1. First query: Cursor sees only `auto_select_tool`
-2. You ask: "search my repos"
-3. Nexus routes to correct GitHub tool automatically
-4. Next query: Cursor receives only top 5 relevant tools
-5. Result: 91.8% token reduction (measured)
-
-Run `npx tsx apps/mcp/src/lib/tokenMeasurement.test.ts` to see the proof.
 
 ## License
 
@@ -182,8 +159,6 @@ MIT
 
 ## Contributing
 
-Issues and PRs welcome! This was built for the Anthropic MCP Hackathon.
-
----
+Issues and PRs welcome! This was built for the 1y MCP anniversary Hackathon.
 
 Built with ❤️ by [@vgardrinier](https://github.com/vgardrinier)
