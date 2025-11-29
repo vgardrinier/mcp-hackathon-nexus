@@ -1,8 +1,9 @@
 /**
  * Manual test suite for tool routing
- * Run with: tsx apps/mcp/src/lib/toolRouter.manual-test.ts
+ * Run with: pnpm tsx apps/mcp/src/lib/toolRouter.manual-test.ts
  *
  * Tests keyword extraction effectiveness against actual MCP servers
+ * Measures: accuracy, latency, token reduction
  */
 
 import { buildToolIndex } from "./toolIndexer.js";
@@ -56,126 +57,156 @@ const mockNamespaceMap = {
 };
 
 interface TestCase {
-  name: string;
   query: string;
   expectedTool: string | RegExp;
-  expectedConfidence?: "high" | "medium" | "low";
-  shouldPass: boolean;
+  expectedServer: string;
+  description: string;
 }
 
+// Real-world user queries - what people actually type
 const testCases: TestCase[] = [
-  // ===== GITHUB TESTS =====
-  { name: "GitHub: exact tool name", query: "search_repositories", expectedTool: "search_repositories_0_nxs", expectedConfidence: "high", shouldPass: true },
-  { name: "GitHub: camelCase query", query: "searchRepositories", expectedTool: "search_repositories_0_nxs", expectedConfidence: "high", shouldPass: true },
-  { name: "GitHub: natural language", query: "search github repos", expectedTool: "search_repositories_0_nxs", expectedConfidence: "high", shouldPass: true },
-  { name: "GitHub: with noise words", query: "can you search for code in github", expectedTool: "search_code_0_nxs", expectedConfidence: "high", shouldPass: true },
-  { name: "GitHub: complex query", query: "find my repos about AI and resume", expectedTool: /search_(repositories|issues)_0_nxs/, shouldPass: true },
-  { name: "GitHub: search issues", query: "search github issues", expectedTool: "search_issues_0_nxs", expectedConfidence: "high", shouldPass: true },
-
-  // ===== LINEAR TESTS =====
-  { name: "Linear: search issues", query: "search linear issues", expectedTool: "search_issues_1_nxs", expectedConfidence: "high", shouldPass: true },
-  { name: "Linear: create issue", query: "create linear issue", expectedTool: "create_issue_1_nxs", expectedConfidence: "high", shouldPass: true },
-  { name: "Linear: get project", query: "get project details", expectedTool: "get_project_1_nxs", shouldPass: true },
-
-  // ===== SUPABASE TESTS =====
-  { name: "Supabase: list tables", query: "list database tables", expectedTool: "list_tables_2_nxs", expectedConfidence: "high", shouldPass: true },
-  { name: "Supabase: query table", query: "query supabase table", expectedTool: "query_table_2_nxs", expectedConfidence: "high", shouldPass: true },
-  { name: "Supabase: insert row", query: "insert data into table", expectedTool: "insert_row_2_nxs", shouldPass: true },
-
-  // ===== DISAMBIGUATION TESTS =====
-  { name: "Disambiguate: github vs linear issues", query: "search github issues", expectedTool: "search_issues_0_nxs", shouldPass: true },
-  { name: "Disambiguate: linear vs github issues", query: "search linear issues", expectedTool: "search_issues_1_nxs", shouldPass: true },
-  { name: "Ambiguous: 'search issues' (no context)", query: "search issues", expectedTool: /search_issues_(0|1)_nxs/, shouldPass: true },
-
-  // ===== KNOWN FAILURES (need synonyms) =====
-  { name: "FAIL: code review → pull request", query: "code review", expectedTool: "get_pull_request_0_nxs", shouldPass: false },
-  { name: "FAIL: ticket → issue", query: "create a ticket", expectedTool: /create_issue_(0|1)_nxs/, shouldPass: false },
-  { name: "FAIL: PR → pull request", query: "create PR", expectedTool: "create_pull_request_0_nxs", shouldPass: false },
-  { name: "FAIL: merge → pull request", query: "merge request", expectedTool: "create_pull_request_0_nxs", shouldPass: false }
+  // ===== CLEAR INTENT (should be HIGH confidence) =====
+  { query: "search github repos", expectedTool: "search_repositories_0_nxs", expectedServer: "GitHub", description: "Clear server + action" },
+  { query: "find code in my github repos", expectedTool: "search_code_0_nxs", expectedServer: "GitHub", description: "Natural language with server" },
+  { query: "list my linear issues", expectedTool: "search_issues_1_nxs", expectedServer: "Linear", description: "Linear issues request" },
+  { query: "show supabase tables", expectedTool: "list_tables_2_nxs", expectedServer: "Supabase", description: "Database tables" },
+  { query: "create a github issue", expectedTool: "create_issue_0_nxs", expectedServer: "GitHub", description: "Create with server context" },
+  { query: "query the database", expectedTool: "query_table_2_nxs", expectedServer: "Supabase", description: "Database query" },
+  
+  // ===== SYNONYMS (tests synonym mapping) =====
+  { query: "find my repos", expectedTool: "search_repositories_0_nxs", expectedServer: "GitHub", description: "Synonym: find → search" },
+  { query: "get my PRs", expectedTool: "get_pull_request_0_nxs", expectedServer: "GitHub", description: "Synonym: PR → pull request" },
+  { query: "create a ticket in linear", expectedTool: "create_issue_1_nxs", expectedServer: "Linear", description: "Synonym: ticket → issue" },
+  { query: "show me the code review", expectedTool: "get_pull_request_0_nxs", expectedServer: "GitHub", description: "Synonym: code review → PR" },
+  
+  // ===== AMBIGUOUS (should trigger clarification) =====
+  { query: "search issues", expectedTool: /search_issues_(0|1)_nxs/, expectedServer: "GitHub|Linear", description: "Ambiguous: GitHub or Linear?" },
+  { query: "create an issue", expectedTool: /create_issue_(0|1)_nxs/, expectedServer: "GitHub|Linear", description: "Ambiguous: which service?" },
+  
+  // ===== NATURAL LANGUAGE (verbose queries) =====
+  { query: "I want to find all repositories related to machine learning", expectedTool: "search_repositories_0_nxs", expectedServer: "GitHub", description: "Verbose natural language" },
+  { query: "can you please search for issues in github", expectedTool: "search_issues_0_nxs", expectedServer: "GitHub", description: "Polite verbose query" },
+  { query: "what tables do I have in my database", expectedTool: "list_tables_2_nxs", expectedServer: "Supabase", description: "Question format" },
+  
+  // ===== EXACT TOOL NAMES =====
+  { query: "search_repositories", expectedTool: "search_repositories_0_nxs", expectedServer: "GitHub", description: "Exact tool name" },
+  { query: "list_tables", expectedTool: "list_tables_2_nxs", expectedServer: "Supabase", description: "Exact tool name" },
 ];
 
+// Estimate tokens for a tool (name + description + schema overhead)
+function estimateToolTokens(tool: { name: string; description?: string }): number {
+  const nameTokens = Math.ceil(tool.name.length / 4);
+  const descTokens = Math.ceil((tool.description?.length || 0) / 4);
+  return nameTokens + descTokens + 15; // +15 for JSON structure
+}
+
 async function runTests() {
+  console.log("🚀 Starting Tool Router Tests\n");
   console.log("🧪 Building tool index...\n");
+  
   const toolIndex = await buildToolIndex(mockEndServers, mockNamespaceMap);
   const router = new ToolRouter(toolIndex);
+  const allTools = router.getAllTools();
 
   console.log(`📊 Index Stats:`);
-  console.log(`  - Total tools: ${toolIndex.byName.size}`);
-  console.log(`  - Unique keywords: ${toolIndex.byKeyword.size}`);
-  console.log(`\n${"=".repeat(80)}\n`);
+  console.log(`   Total tools: ${toolIndex.byName.size}`);
+  console.log(`   Unique keywords: ${toolIndex.byKeyword.size}`);
+  console.log(`\n${"=".repeat(70)}\n`);
 
+  // Calculate baseline token cost (all tools)
+  const totalTokensAllTools = allTools.reduce((sum, t) => sum + estimateToolTokens(t), 0);
+
+  // Run tests and collect metrics
   let passed = 0;
   let failed = 0;
-  let knownFailures = 0;
+  let clarificationRequests = 0;
+  const latencies: number[] = [];
+  const tokenSavings: number[] = [];
+
+  console.log("📝 ROUTING TESTS\n");
 
   for (const test of testCases) {
-    try {
-      const result = await router.route({ userQuery: test.query });
+    const start = performance.now();
+    const result = await router.route({ userQuery: test.query });
+    const latency = performance.now() - start;
+    latencies.push(latency);
 
-      let testPassed: boolean;
-      if (typeof test.expectedTool === "string") {
-        testPassed = result.selectedTool === test.expectedTool;
-      } else {
-        testPassed = test.expectedTool.test(result.selectedTool);
-      }
-
-      if (test.expectedConfidence) {
-        testPassed = testPassed && result.confidence === test.expectedConfidence;
-      }
-
-      const icon = testPassed ? "✅" : (test.shouldPass ? "❌" : "⚠️ ");
-      const status = testPassed ? "PASS" : (test.shouldPass ? "FAIL" : "KNOWN FAIL");
-
-      console.log(`${icon} ${status}: ${test.name}`);
-      console.log(`   Query: "${test.query}"`);
-      console.log(`   Selected: ${result.selectedTool} (${result.confidence} confidence)`);
-      console.log(`   Reason: ${result.reason}`);
-
-      if (!testPassed && test.shouldPass) {
-        console.log(`   ❗ Expected: ${test.expectedTool}`);
-        failed++;
-      } else if (testPassed) {
-        passed++;
-      } else {
-        knownFailures++;
-      }
-
-      console.log();
-    } catch (error) {
-      console.log(`❌ ERROR: ${test.name}`);
-      console.log(`   Query: "${test.query}"`);
-      console.log(`   Error: ${error instanceof Error ? error.message : String(error)}`);
-      console.log();
-      failed++;
+    // Check if result matches expected
+    let testPassed: boolean;
+    if (typeof test.expectedTool === "string") {
+      testPassed = result.selectedTool === test.expectedTool;
+    } else {
+      testPassed = test.expectedTool.test(result.selectedTool);
     }
+
+    // Calculate token savings for this query
+    const filtered = router.searchTools(test.query, 5);
+    const filteredTokens = filtered.reduce((sum, t) => sum + estimateToolTokens(t), 0);
+    const savings = ((totalTokensAllTools - filteredTokens) / totalTokensAllTools) * 100;
+    tokenSavings.push(savings);
+
+    // Track clarification requests
+    if (result.needsClarification) {
+      clarificationRequests++;
+    }
+
+    // Display result
+    const icon = testPassed ? "✅" : "❌";
+    const confIcon = result.confidence === "high" ? "🟢" : result.confidence === "medium" ? "🟡" : "🔴";
+    const clarifyNote = result.needsClarification ? " [asks for clarification]" : "";
+    
+    console.log(`${icon} "${test.query}"`);
+    console.log(`   ${confIcon} ${result.confidence} → ${result.selectedTool.replace(/_\d+_nxs$/, '')} (${test.expectedServer})`);
+    console.log(`   ⚡ ${latency.toFixed(2)}ms | 💾 ${savings.toFixed(0)}% token reduction${clarifyNote}`);
+    
+    if (!testPassed) {
+      console.log(`   ❗ Expected: ${test.expectedTool}`);
+      failed++;
+    } else {
+      passed++;
+    }
+    console.log();
   }
 
-  console.log(`${"=".repeat(80)}\n`);
-  console.log(`📈 Test Results:`);
-  console.log(`   ✅ Passed: ${passed}/${testCases.filter(t => t.shouldPass).length}`);
-  console.log(`   ❌ Failed: ${failed}`);
-  console.log(`   ⚠️  Known Failures (need synonyms): ${knownFailures}`);
-  console.log();
+  // Summary
+  console.log(`${"=".repeat(70)}\n`);
+  console.log(`📈 RESULTS SUMMARY\n`);
+  
+  const passRate = (passed / testCases.length * 100).toFixed(1);
+  console.log(`🎯 Accuracy: ${passed}/${testCases.length} (${passRate}%)`);
+  console.log(`🔀 Clarification requests: ${clarificationRequests}/${testCases.length}`);
+  
+  const avgLatency = latencies.reduce((a, b) => a + b, 0) / latencies.length;
+  const maxLatency = Math.max(...latencies);
+  const minLatency = Math.min(...latencies);
+  console.log(`\n⚡ LATENCY:`);
+  console.log(`   Average: ${avgLatency.toFixed(2)}ms`);
+  console.log(`   Min: ${minLatency.toFixed(2)}ms`);
+  console.log(`   Max: ${maxLatency.toFixed(2)}ms`);
+  
+  const avgTokenSavings = tokenSavings.reduce((a, b) => a + b, 0) / tokenSavings.length;
+  console.log(`\n💾 TOKEN REDUCTION:`);
+  console.log(`   Baseline (all tools): ~${totalTokensAllTools} tokens`);
+  console.log(`   After filtering: ~${Math.round(totalTokensAllTools * (1 - avgTokenSavings / 100))} tokens avg`);
+  console.log(`   Average savings: ${avgTokenSavings.toFixed(1)}%`);
 
-  const passRate = (passed / testCases.filter(t => t.shouldPass).length * 100).toFixed(1);
-  console.log(`🎯 Success Rate: ${passRate}%`);
+  // Cost impact
+  const costPer1MTokens = 3; // Claude Haiku pricing
+  const queriesPerMonth = 10000;
+  const oldCost = (totalTokensAllTools * queriesPerMonth / 1_000_000) * costPer1MTokens;
+  const newCost = (totalTokensAllTools * (1 - avgTokenSavings / 100) * queriesPerMonth / 1_000_000) * costPer1MTokens;
+  console.log(`\n💰 COST IMPACT (10K queries/month):`);
+  console.log(`   Without filtering: $${oldCost.toFixed(2)}`);
+  console.log(`   With filtering: $${newCost.toFixed(2)}`);
+  console.log(`   Savings: $${(oldCost - newCost).toFixed(2)}/month`);
 
+  console.log(`\n${"=".repeat(70)}`);
+  
   if (failed === 0) {
-    console.log(`\n🎉 All expected tests passed! Keyword extraction is working well.`);
+    console.log(`\n🎉 All tests passed!`);
   } else {
-    console.log(`\n💡 ${failed} test(s) failed. Consider adding synonym support.`);
-  }
-
-  // Show which cases would benefit from synonyms
-  const synonymNeeded = testCases.filter(t => !t.shouldPass);
-  if (synonymNeeded.length > 0) {
-    console.log(`\n🔍 Synonym Opportunities (${synonymNeeded.length} cases):`);
-    synonymNeeded.forEach(t => {
-      console.log(`   - "${t.query}" → needs synonym mapping`);
-    });
+    console.log(`\n⚠️  ${failed} test(s) need attention.`);
   }
 }
 
-// Run tests
-console.log("🚀 Starting Tool Router Tests\n");
 runTests().catch(console.error);

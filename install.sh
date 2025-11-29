@@ -66,6 +66,8 @@ mkdir -p "$CONFIG_DIR/servers/custom/github"
 mkdir -p "$CONFIG_DIR/servers/custom/linear"
 mkdir -p "$CONFIG_DIR/servers/custom/supabase"
 mkdir -p "$CONFIG_DIR/servers/custom/firecrawl"
+mkdir -p "$CONFIG_DIR/servers/custom/notion"
+mkdir -p "$CONFIG_DIR/servers/custom/n8n"
 
 # Create GitHub server config
 cat > "$CONFIG_DIR/servers/custom/github/config.yml" <<'EOF'
@@ -174,6 +176,65 @@ config:
   args:
     - "-y"
     - "firecrawl-mcp"
+EOF
+
+# Create Notion server config
+cat > "$CONFIG_DIR/servers/custom/notion/config.yml" <<'EOF'
+id: notion-mcp-server
+name: Notion
+description: Read and write to Notion pages and databases
+sourceUrl: https://github.com/makenotion/notion-mcp-server
+category: official
+logoUrl: https://www.notion.so/images/favicon.ico
+
+requiresAuth: true
+
+env:
+  - key: NOTION_TOKEN
+    name: Notion Integration Token
+    description: Create an integration at https://www.notion.so/profile/integrations
+    required: true
+    valueFromEnv: NOTION_TOKEN
+
+config:
+  transport: stdio
+  command: npx
+  args:
+    - "-y"
+    - "@notionhq/notion-mcp-server"
+EOF
+
+# Create n8n server config
+cat > "$CONFIG_DIR/servers/custom/n8n/config.yml" <<'EOF'
+id: n8n-mcp-server
+name: n8n
+description: Automate workflows with n8n - access 543 nodes for integrations, workflows, and automation
+sourceUrl: https://github.com/czlonkowski/n8n-mcp
+category: official
+logoUrl: https://n8n.io/favicon.ico
+
+requiresAuth: false
+
+env:
+  - key: N8N_API_URL
+    name: n8n API URL
+    description: Your n8n instance URL (optional - for workflow management)
+    required: false
+    valueFromEnv: N8N_API_URL
+  - key: N8N_API_KEY
+    name: n8n API Key
+    description: Authentication token for n8n API (optional - for workflow management)
+    required: false
+    valueFromEnv: N8N_API_KEY
+
+config:
+  transport: stdio
+  command: npx
+  args:
+    - "-y"
+    - "n8n-mcp"
+  env:
+    MCP_MODE: stdio
 EOF
 
 echo -e "${GREEN}✓${NC} Created server configs in $CONFIG_DIR"

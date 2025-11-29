@@ -335,6 +335,33 @@ proxyMCPServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       console.log(`\x1B[92m[Auto-Select] Selected: ${result.selectedTool} (confidence: ${result.confidence})\x1B[0m`);
       console.log(`\x1B[90m[Auto-Select] Reason: ${result.reason}\x1B[0m`);
 
+      // Handle ambiguous routing - return candidates for outer LLM to resolve
+      if (result.needsClarification && result.candidates) {
+        // Truncate descriptions to keep response concise
+        const truncateDesc = (desc?: string, maxLen = 80) => {
+          if (!desc) return '';
+          const firstLine = desc.split('\n')[0].trim();
+          return firstLine.length > maxLen ? firstLine.slice(0, maxLen) + '...' : firstLine;
+        };
+
+        const candidateList = result.candidates
+          .slice(0, 4) // Max 4 candidates
+          .map((c) => `• **${c.server}**: \`${c.tool}\`${truncateDesc(c.description) ? ` - ${truncateDesc(c.description)}` : ''}`)
+          .join("\n");
+        
+        // Keep clarification message short and actionable
+        const clarificationMessage = `🔀 Which service did you mean?
+
+${candidateList}
+
+💡 Try: "${result.candidates[0].server.toLowerCase()} ${intent}" or "${result.candidates[1]?.server.toLowerCase() || result.candidates[0].server.toLowerCase()} ${intent}"`;
+
+        return {
+          content: [{ type: "text", text: clarificationMessage }],
+          isError: false
+        };
+      }
+
       // Now execute the selected tool
       if (result.selectedTool.endsWith("_nxs")) {
         const { nexusId, toolName } = parseNamespacedToolName(result.selectedTool);
@@ -389,12 +416,16 @@ proxyMCPServer.setRequestHandler(CallToolRequestSchema, async (request) => {
           // Log completion
           await logHandle.complete(toolResult);
 
+          // Build clean header - minimal, just shows what was called
+          const serverName = endServer.name;
+          const header = `✅ **${serverName}** → \`${toolName}\``;
+
           return {
             ...toolResult,
             content: [
               {
                 type: "text",
-                text: `[Auto-selected: ${result.selectedTool} (${result.confidence} confidence)]\n${result.reason}\n\n`
+                text: header
               },
               ...(Array.isArray(toolResult.content) ? toolResult.content : [toolResult.content])
             ]

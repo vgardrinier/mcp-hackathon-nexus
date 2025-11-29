@@ -119,21 +119,27 @@ export function getServerConfig(serverId: string): ServerConfig | null {
 }
 
 /**
- * Check if a server is configured (has all required env vars filled)
+ * Check if a server is configured (has all required env vars with actual values)
+ * A server is considered configured if the user has provided actual token/credential values,
+ * not just the template with valueFromEnv placeholders.
  */
 export function isServerConfigured(config: ServerConfig): boolean {
   if (!config.env || config.env.length === 0) {
     // No env vars required
     if (config.config.transport === "streamable-http") {
       // HTTP servers might need auth token
-      return config.requiresAuth ? Boolean(config.accessToken || config.accessTokenFromEnv) : true;
+      return config.requiresAuth ? Boolean(config.accessToken) : true;
     }
     return true;
   }
 
-  // Check if all required env vars have values
+  // Check if all required env vars have actual values provided by the user
   const requiredVars = config.env.filter((v) => v.required);
-  return requiredVars.every((v) => Boolean(v.value || v.valueFromEnv || v.valueFromFile));
+  return requiredVars.every((v) => {
+    // Only consider it configured if there's an actual value set
+    // (not just valueFromEnv template)
+    return Boolean(v.value);
+  });
 }
 
 /**

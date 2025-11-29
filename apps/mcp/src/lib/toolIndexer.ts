@@ -40,18 +40,12 @@ const STOPWORDS = new Set([
   "be",
   "been",
   "being",
-  // Verbose description noise words
+  // Verbose description noise words (removed action verbs - they're useful!)
   "using",
   "string",
   "details",
   "specific",
   "new",
-  "fetch",
-  "get",
-  "set",
-  "create",
-  "update",
-  "delete",
   "this",
   "that",
   "these",
@@ -131,8 +125,11 @@ export async function buildToolIndex(
           tool.description
         );
 
+        // Add server name as high-priority keywords
+        const serverKeywords = server.name.toLowerCase().split(/[\s_\-]+/).filter(k => k.length > 2);
+
         // All keywords for this tool
-        const allKeywords = [...nameKeywords, ...descriptionKeywords];
+        const allKeywords = [...nameKeywords, ...descriptionKeywords, ...serverKeywords];
 
         // Store metadata
         const metadata: ToolMetadata = {
@@ -146,13 +143,24 @@ export async function buildToolIndex(
 
         index.byName.set(namespacedName, metadata);
 
-        // Index by keyword with name keywords getting priority
+        // Index by keyword with name & server keywords getting priority
         // Name keywords get indexed twice for boosting in search
         for (const keyword of nameKeywords) {
           if (!index.byKeyword.has(keyword)) {
             index.byKeyword.set(keyword, []);
           }
           // Add twice for boosting (will be scored higher in matching)
+          index.byKeyword.get(keyword)!.push(namespacedName);
+          index.byKeyword.get(keyword)!.push(namespacedName);
+        }
+
+        // Server keywords also get boosted (3x for strong server disambiguation)
+        for (const keyword of serverKeywords) {
+          if (!index.byKeyword.has(keyword)) {
+            index.byKeyword.set(keyword, []);
+          }
+          // Add 3x for strong server preference
+          index.byKeyword.get(keyword)!.push(namespacedName);
           index.byKeyword.get(keyword)!.push(namespacedName);
           index.byKeyword.get(keyword)!.push(namespacedName);
         }

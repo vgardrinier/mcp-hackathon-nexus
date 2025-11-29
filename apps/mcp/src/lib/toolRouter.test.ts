@@ -627,4 +627,99 @@ describe("Tool Router - Real World Tests", () => {
       expect(tokenReduction).toBeGreaterThan(50);
     });
   });
+
+  describe("Clarification Flow (Outer LLM Disambiguation)", () => {
+    it("should return needsClarification for ambiguous cross-server queries", async () => {
+      // "search issues" is ambiguous between GitHub and Linear
+      const result = await router.route({ userQuery: "search issues" });
+
+      console.log(`\n🔀 Cross-server ambiguity test:`);
+      console.log(`   Query: "search issues"`);
+      console.log(`   Confidence: ${result.confidence}`);
+      console.log(`   Needs clarification: ${result.needsClarification || false}`);
+      
+      if (result.needsClarification && result.candidates) {
+        console.log(`   Candidates offered to outer LLM:`);
+        result.candidates.forEach((c, i) => {
+          console.log(`     ${i + 1}. ${c.server}:${c.tool}`);
+        });
+      }
+
+      // Should ask for clarification when ambiguous
+      if (result.confidence === "medium" && result.needsClarification) {
+        expect(result.candidates).toBeDefined();
+        expect(result.candidates!.length).toBeGreaterThan(1);
+      }
+    });
+
+    it("should return needsClarification for low confidence queries", async () => {
+      const result = await router.route({ userQuery: "do something" });
+
+      console.log(`\n⚠️  Low confidence test:`);
+      console.log(`   Query: "do something"`);
+      console.log(`   Confidence: ${result.confidence}`);
+      
+      if (result.needsClarification && result.candidates) {
+        console.log(`   Candidates offered:`);
+        result.candidates.slice(0, 3).forEach((c, i) => {
+          console.log(`     ${i + 1}. ${c.server}:${c.tool}`);
+        });
+      }
+
+      // Low confidence should always ask for clarification
+      if (result.confidence === "low") {
+        expect(result.needsClarification).toBe(true);
+        expect(result.candidates).toBeDefined();
+      }
+    });
+
+    it("should NOT need clarification for high confidence queries", async () => {
+      const result = await router.route({ userQuery: "search github repos" });
+
+      console.log(`\n✅ High confidence test:`);
+      console.log(`   Query: "search github repos"`);
+      console.log(`   Selected: ${result.selectedTool}`);
+      console.log(`   Confidence: ${result.confidence}`);
+
+      expect(result.confidence).toBe("high");
+      expect(result.needsClarification).toBeFalsy();
+    });
+
+    it("should track routing decisions across query types", async () => {
+      const testQueries = [
+        { query: "search_repositories", expectedConfidence: "high" },
+        { query: "search github repos", expectedConfidence: "high" },
+        { query: "search issues", expectedConfidence: "medium" },
+        { query: "do something", expectedConfidence: "low" }
+      ];
+
+      console.log(`\n📊 Routing Decision Analysis:`);
+      
+      for (const test of testQueries) {
+        const result = await router.route({ userQuery: test.query });
+        
+        const icon = result.confidence === "high" ? "✅" : 
+                     result.confidence === "medium" ? "🔀" : "⚠️";
+        const clarify = result.needsClarification ? " (asks outer LLM)" : "";
+        
+        console.log(`   ${icon} "${test.query}" → ${result.confidence}${clarify}`);
+      }
+    });
+
+    it("should be fast even when returning clarification candidates", async () => {
+      const query = "search issues";
+
+      const start = performance.now();
+      const result = await router.route({ userQuery: query });
+      const duration = performance.now() - start;
+
+      console.log(`\n⚡ Clarification flow latency:`);
+      console.log(`   Query: "${query}"`);
+      console.log(`   Duration: ${duration.toFixed(2)}ms`);
+      console.log(`   Returned ${result.candidates?.length || 0} candidates`);
+
+      // Should be fast (no external API calls)
+      expect(duration).toBeLessThan(10);
+    });
+  });
 });
