@@ -31,6 +31,12 @@ services:
     environment:
       CHOKIDAR_USEPOLLING: "1"
       NEXT_TELEMETRY_DISABLED: "1"
+      # MCP Server Tokens (read from .env file)
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      LINEAR_API_KEY: ${LINEAR_API_KEY:-}
+      NOTION_TOKEN: ${NOTION_TOKEN:-}
+      SUPABASE_ACCESS_TOKEN: ${SUPABASE_ACCESS_TOKEN:-}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
     ports:
       - "3000:3000"
     volumes:
@@ -52,6 +58,12 @@ services:
       EDISON_ENABLED: "true"
       EDISON_URL: "http://edison:4000"
       EDISON_API_KEY: "dev-api-key-change-me"
+      # MCP Server Tokens (read from .env file)
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      LINEAR_API_KEY: ${LINEAR_API_KEY:-}
+      NOTION_TOKEN: ${NOTION_TOKEN:-}
+      SUPABASE_ACCESS_TOKEN: ${SUPABASE_ACCESS_TOKEN:-}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
     ports:
       - "3001:3001"
     volumes:
