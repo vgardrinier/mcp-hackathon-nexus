@@ -49,7 +49,7 @@ services:
       && pnpm dev:mcp:http"
     environment:
       ALLOW_UNAUTHENTICATED_MCP: "true"
-      EDISON_ENABLED: "false"
+      EDISON_ENABLED: "true"
       EDISON_URL: "http://edison:4000"
       EDISON_API_KEY: "dev-api-key-change-me"
     ports:
