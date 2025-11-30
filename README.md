@@ -1,8 +1,33 @@
+---
+title: Nexus
+emoji: 🔗
+colorFrom: purple
+colorTo: blue
+sdk: gradio
+sdk_version: "4.44.0"
+app_file: app.py
+tags:
+  - building-mcp-track-enterprise
+  - mcp
+  - mcp-server
+  - security
+  - enterprise
+pinned: false
+license: mit
+short_description: "Run MCP servers locally. Complete privacy. Sub-100ms latency."
+---
+
 # Nexus
 
 **Run MCP servers locally. Complete privacy. Sub-100ms latency.**
 
 Nexus runs fully on your machine—nothing ever leaves your device. Get sub-100ms latency (vs cloud's 5-10 seconds) and 92.9% lower token usage through intelligent tool filtering. Full transparent logs for every operation.
+
+## 🎬 Demo Video
+
+[![Nexus Demo](https://img.shields.io/badge/Watch%20Demo-Loom-blueviolet?style=for-the-badge&logo=loom)](https://www.loom.com/share/5c444c739f9f4a61a752c357ea8334d6)
+
+**[▶️ Watch the 3-minute demo on Loom](https://www.loom.com/share/5c444c739f9f4a61a752c357ea8334d6)**
 
 ## Features
 
