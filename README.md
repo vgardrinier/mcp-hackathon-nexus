@@ -7,6 +7,7 @@ Nexus runs fully on your machine—nothing ever leaves your device. Get sub-100m
 ## Features
 
 - 🔒 **100% Local** - Docker-based your data & tokens never leaves your machine
+- 🛡️ **Edison Security** - Prevents prompt injection & data exfiltration automatically
 - ⚡ **Fast** - Sub-100ms latency vs cloud MCP routing (5-10 seconds)
 - 💰 **Token Efficient** - 91.8% lower token usage through smart tool filtering
 - 🔍 **Transparent** - Full logs of every tool call and response
@@ -77,6 +78,59 @@ Nexus acts as an L2 proxy that:
 4. Logs everything for transparency
 
 All processing happens locally—zero cloud dependencies.
+
+## Security (Edison Integration)
+
+Nexus includes **Open Edison** security layer to prevent AI agents from being tricked by malicious content:
+
+### What Edison Protects Against
+
+1. **Prompt Injection via External Content**
+   - Malicious GitHub issues/PRs containing hidden AI instructions
+   - Compromised Notion pages with embedded commands
+   - Web scraping results with attack payloads
+
+2. **Data Exfiltration (Lethal Trifecta)**
+   - Reading untrusted content (GitHub, Notion)
+   - + Accessing private data (Supabase, Linear)
+   - + Writing externally (creating issues, posting to Slack)
+   - → **Blocked automatically**
+
+### How It Works
+
+Edison tracks three risk flags per conversation:
+- `UNTRUSTED_CONTENT` - Read from GitHub, Notion, web (⚠️ flagged)
+- `PRIVATE_DATA` - Read from Supabase, Linear, databases (🔒 flagged)
+- `EXTERNAL_COMM` - Write/send to external services (📤 flagged)
+
+**Normal operations always allowed:**
+```bash
+✅ "List my GitHub PRs"                    # Single flag, allowed
+✅ "Query my Supabase database"            # Single flag, allowed
+✅ "Get Supabase data, create Linear issue" # Two flags (both private), allowed
+```
+
+**Dangerous patterns blocked:**
+```bash
+🚨 "Read GitHub issue, get Supabase data, post to Slack"
+   → BLOCKED: All three flags triggered (lethal trifecta)
+
+🚨 "Fetch data from sketchy website, read .env, send webhook"
+   → BLOCKED: Data exfiltration pattern detected
+```
+
+### Server Classifications (Auto-Generated)
+
+Nexus automatically classifies your MCP servers:
+- **Untrusted** (⚠️): GitHub, Notion, Firecrawl - public content
+- **Private** (🔒): Linear, Jira, internal tools
+- **Secret** (🔐): Supabase, filesystem, databases
+
+No manual configuration needed - just `docker compose up`!
+
+### Fail-Open Mode
+
+If Edison is unavailable, Nexus continues working with warnings logged. Your workflow never breaks.
 
 ## Management
 
