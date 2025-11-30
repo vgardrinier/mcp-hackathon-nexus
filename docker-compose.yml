@@ -1,4 +1,26 @@
 services:
+  edison:
+    image: python:3.12-slim
+    command: >
+      sh -c "apt-get update -qq && apt-get install -y -qq curl &&
+      pip install --quiet open-edison &&
+      open-edison --host 0.0.0.0 --port 4000"
+    environment:
+      OPEN_EDISON_SKIP_TUI: "true"
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "4000:4000"
+      - "4001:4001"
+    volumes:
+      - ~/.config/nexus/edison:/root/.config/open-edison
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
   dashboard:
     build:
       context: .
@@ -17,6 +39,9 @@ services:
       - pnpm-store:/root/.local/share/pnpm
       - ~/.config/nexus:/root/.config/nexus
     restart: "no"
+    depends_on:
+      edison:
+        condition: service_healthy
 
   mcp:
     build:
@@ -27,6 +52,9 @@ services:
       && pnpm dev:mcp:http"
     environment:
       ALLOW_UNAUTHENTICATED_MCP: "true"
+      EDISON_ENABLED: "true"
+      EDISON_URL: "http://edison:4000"
+      EDISON_API_KEY: "dev-api-key-change-me"
     ports:
       - "3001:3001"
     volumes:
@@ -35,7 +63,10 @@ services:
       - pnpm-store:/root/.local/share/pnpm
       - ~/.config/nexus:/root/.config/nexus
     depends_on:
-      - dashboard
+      edison:
+        condition: service_healthy
+      dashboard:
+        condition: service_started
     restart: "no"
 
 volumes:
