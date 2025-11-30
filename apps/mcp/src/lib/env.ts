@@ -23,7 +23,21 @@ const envSchema = z.object({
   ALLOW_UNAUTHENTICATED_MCP: z
     .union([z.literal("true"), z.literal("false")])
     .optional()
+    .transform((value) => value === "true"),
+  EDISON_ENABLED: z
+    .union([z.literal("true"), z.literal("false")])
+    .optional()
     .transform((value) => value === "true")
+    .default("false" as any),
+  EDISON_URL: z
+    .string()
+    .url()
+    .optional()
+    .default("http://localhost:4000"),
+  EDISON_API_KEY: z
+    .string()
+    .optional()
+    .default("dev-api-key-change-me")
 });
 
 export const env = envSchema.parse(process.env);

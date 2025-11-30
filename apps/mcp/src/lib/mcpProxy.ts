@@ -11,6 +11,13 @@ import { loadConfiguredEndServers } from "./configLoader.js";
 import type { ToolRouter } from "./toolRouter.js";
 import { ActivityLogger } from "./activityLogger.js";
 import { sanitizeIntent, detectInjectionAttempt, checkRateLimit } from "./security.js";
+import { edisonClient } from "./edisonClient.js";
+import { syncNexusConfigToEdison, classifyServer } from "./edisonConfigGenerator.js";
+import { resolve } from "node:path";
+import { homedir } from "node:os";
+
+// Track total tools for metrics
+let totalToolsAvailable = 0;
 
 const SERVER_INFO = {
   name: "Nexus L2 MCP",
@@ -399,12 +406,70 @@ ${candidateList}
           }
         }
 
-        // Log tool call start
+        // Get security classification for this server
+        const serverData = endServersData[endServerId];
+        const classification = serverData ? classifyServer(serverData) : null;
+        const securityInfo: { status: "safe" | "monitored" | "blocked"; trustLevel: "trusted" | "untrusted"; reason?: string } = {
+          status: "safe",
+          trustLevel: classification?.trustLevel === "UNTRUSTED" ? "untrusted" : "trusted",
+        };
+
+        // Edison security check (if enabled)
+        if (edisonClient.isEnabled()) {
+          console.log(`\x1B[96m[Security] 🔒 Checking ${endServer.name}:${toolName}\x1B[0m`);
+
+          const edisonResult = await edisonClient.callTool(
+            endServer.name,
+            toolName,
+            request
+          );
+
+          if (!edisonResult.allowed || edisonResult.blocked) {
+            console.log(`\x1B[91m[Security] 🚨 BLOCKED: ${edisonResult.reason}\x1B[0m`);
+            securityInfo.status = "blocked";
+            securityInfo.reason = edisonResult.reason || "Blocked by Nexus Security";
+
+            // Log the blocked attempt
+            const blockedLogHandle = await activityLogger.logToolCall(
+              endServer.name,
+              endServer.id,
+              toolName,
+              finalArgs,
+              {
+                routing: { toolsSent: 1, toolsAvailable: totalToolsAvailable },
+                security: securityInfo
+              }
+            );
+            await blockedLogHandle.complete(undefined, securityInfo.reason);
+
+            return {
+              content: [{
+                type: "text",
+                text: `🚨 **Security Block**\n\n${edisonResult.reason || 'This operation was blocked by Nexus Security.'}\n\n💡 This prevents potential data exfiltration or prompt injection attacks.`
+              }],
+              isError: true
+            };
+          }
+
+          // Mark as monitored if from untrusted source
+          if (securityInfo.trustLevel === "untrusted") {
+            securityInfo.status = "monitored";
+            securityInfo.reason = "External content source - monitoring for injection";
+          }
+
+          console.log(`\x1B[92m[Security] ✅ Allowed: ${endServer.name}:${toolName}\x1B[0m`);
+        }
+
+        // Log tool call start with routing and security metrics
         const logHandle = await activityLogger.logToolCall(
           endServer.name,
           endServer.id,
           toolName,
-          finalArgs
+          finalArgs,
+          {
+            routing: { toolsSent: 1, toolsAvailable: totalToolsAvailable },
+            security: securityInfo
+          }
         );
 
         try {
@@ -463,27 +528,86 @@ ${candidateList}
     const endServerId = namespaceToServerId[nexusId];
     const endServer = endServers[endServerId];
 
+    // Get security classification for this server
+    const serverData = endServersData[endServerId];
+    const classification = serverData ? classifyServer(serverData) : null;
+    const securityInfo: { status: "safe" | "monitored" | "blocked"; trustLevel: "trusted" | "untrusted"; reason?: string } = {
+      status: "safe",
+      trustLevel: classification?.trustLevel === "UNTRUSTED" ? "untrusted" : "trusted",
+    };
+
+    // Edison security check (if enabled)
+    if (edisonClient.isEnabled()) {
+      console.log(`\x1B[96m[Security] 🔒 Checking ${endServer.name}:${toolName}\x1B[0m`);
+
+      const edisonResult = await edisonClient.callTool(
+        endServer.name,
+        toolName,
+        request
+      );
+
+      if (!edisonResult.allowed || edisonResult.blocked) {
+        console.log(`\x1B[91m[Security] 🚨 BLOCKED: ${edisonResult.reason}\x1B[0m`);
+        securityInfo.status = "blocked";
+        securityInfo.reason = edisonResult.reason || "Blocked by Nexus Security";
+
+        // Log the blocked attempt
+        const args = (request.params.arguments as Record<string, unknown>) || {};
+        const blockedLogHandle = await activityLogger.logToolCall(
+          endServer.name,
+          endServer.id,
+          toolName,
+          args,
+          {
+            routing: { toolsSent: 1, toolsAvailable: totalToolsAvailable },
+            security: securityInfo
+          }
+        );
+        await blockedLogHandle.complete(undefined, securityInfo.reason);
+
+        return {
+          content: [{
+            type: "text",
+            text: `🚨 **Security Block**\n\n${edisonResult.reason || 'This operation was blocked by Nexus Security.'}\n\n💡 This prevents potential data exfiltration or prompt injection attacks.`
+          }],
+          isError: true
+        };
+      }
+
+      // Mark as monitored if from untrusted source
+      if (securityInfo.trustLevel === "untrusted") {
+        securityInfo.status = "monitored";
+        securityInfo.reason = "External content source - monitoring for injection";
+      }
+
+      console.log(`\x1B[92m[Security] ✅ Allowed: ${endServer.name}:${toolName}\x1B[0m`);
+    }
+
     // Security: Check rate limit before execution
     const rateLimit = checkRateLimit(toolName);
     if (!rateLimit.allowed) {
       const resetInSec = Math.ceil(rateLimit.resetInMs / 1000);
       console.log(`\x1B[91m[Security] 🚫 Rate limit exceeded for ${toolName}. Reset in ${resetInSec}s\x1B[0m`);
       return {
-        content: [{ 
-          type: "text", 
-          text: `⚠️ Rate limit exceeded for tool '${toolName}'. Try again in ${resetInSec} seconds.\n\nThis limit helps prevent API quota exhaustion.` 
+        content: [{
+          type: "text",
+          text: `⚠️ Rate limit exceeded for tool '${toolName}'. Try again in ${resetInSec} seconds.\n\nThis limit helps prevent API quota exhaustion.`
         }],
         isError: true
       };
     }
 
-    // Log tool call
+    // Log tool call with routing and security metrics
     const args = (request.params.arguments as Record<string, unknown>) || {};
     const logHandle = await activityLogger.logToolCall(
       endServer.name,
       endServer.id,
       toolName,
-      args
+      args,
+      {
+        routing: { toolsSent: 1, toolsAvailable: totalToolsAvailable },
+        security: securityInfo
+      }
     );
 
     try {
@@ -628,13 +752,38 @@ export async function initializeServer() {
 
   console.log(`\x1B[90mEnd servers installed: ${Object.keys(endServers).length} registered, server is ready.\x1B[0m`);
 
+  // Auto-generate Edison config from Nexus YAML configs
+  if (edisonClient.isEnabled()) {
+    console.log('\x1B[96m[Edison] Generating security configuration from Nexus MCP servers...\x1B[0m');
+    const edisonConfigDir = resolve(homedir(), '.config/nexus/edison');
+    try {
+      await syncNexusConfigToEdison(userEndServers, edisonConfigDir);
+    } catch (error) {
+      console.error(
+        `\x1B[91m[Edison] Failed to generate config: ${error instanceof Error ? error.message : String(error)}\x1B[0m`
+      );
+    }
+
+    // Check Edison health after config generation
+    console.log('\x1B[96m[Edison] Checking connection to Edison security layer...\x1B[0m');
+    const edisonHealthy = await edisonClient.healthCheck();
+    if (edisonHealthy) {
+      console.log('\x1B[92m[Edison] ✅ Edison security layer connected and ready\x1B[0m');
+    } else {
+      console.warn('\x1B[93m[Edison] ⚠️  Edison is enabled but not responding. Running in fail-open mode (operations allowed, warnings logged).\x1B[0m');
+    }
+  } else {
+    console.log('\x1B[90m[Edison] Security layer disabled (set EDISON_ENABLED=true to enable)\x1B[0m');
+  }
+
   // Start polling for config changes every 30 seconds
   startPolling();
 }
 
 export function setToolRouter(router: ToolRouter) {
   toolRouter = router;
-  console.log("\x1B[90m[Router] Tool router initialized\x1B[0m");
+  totalToolsAvailable = router.getAllTools().length;
+  console.log(`\x1B[90m[Router] Tool router initialized with ${totalToolsAvailable} tools\x1B[0m`);
 }
 
 export function getEndServers(): Record<string, EndServer> {

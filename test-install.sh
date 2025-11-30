@@ -55,7 +55,7 @@ cd /tmp/nexus-test
 # Run install script
 echo ""
 echo "📥 Running install script..."
-curl -sL "https://raw.githubusercontent.com/vgardrinier/mcp-hackathon-nexus/local/functional/install.sh" | bash > install.log 2>&1
+curl -sL "https://raw.githubusercontent.com/vgardrinier/mcp-hackathon-nexus/master/install.sh" | bash > install.log 2>&1
 
 INSTALL_EXIT=$?
 if [ $INSTALL_EXIT -ne 0 ]; then
