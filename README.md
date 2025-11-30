@@ -1,21 +1,5 @@
----
-title: Nexus
-emoji: 🔗
-colorFrom: purple
-colorTo: blue
-sdk: gradio
-sdk_version: "4.44.0"
-app_file: app.py
-tags:
+
   - building-mcp-track-enterprise
-  - mcp
-  - mcp-server
-  - security
-  - enterprise
-pinned: false
-license: mit
-short_description: "Run MCP servers locally. Complete privacy. Sub-100ms latency."
----
 
 # Nexus
 
