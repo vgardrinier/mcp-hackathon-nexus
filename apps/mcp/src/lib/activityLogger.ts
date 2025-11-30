@@ -16,6 +16,17 @@ export interface ToolCallLog {
   };
   error?: string;
   duration?: number; // ms
+  // New metrics for CLI display
+  routing?: {
+    toolsSent: number;      // How many tools were sent to LLM (filtered)
+    toolsAvailable: number; // Total tools available
+    tokensSaved: number;    // Estimated tokens saved
+  };
+  security?: {
+    status: "safe" | "monitored" | "blocked"; // Security outcome
+    trustLevel: "trusted" | "untrusted";      // Source trust level
+    reason?: string;                          // Why blocked/monitored
+  };
 }
 
 const LOG_DIR = join(homedir(), ".config", "nexus", "logs");
@@ -249,7 +260,11 @@ export class ActivityLogger {
     serverName: string,
     serverId: string,
     toolName: string,
-    parameters: Record<string, unknown>
+    parameters: Record<string, unknown>,
+    options?: {
+      routing?: { toolsSent: number; toolsAvailable: number };
+      security?: { status: "safe" | "monitored" | "blocked"; trustLevel: "trusted" | "untrusted"; reason?: string };
+    }
   ): Promise<{ complete: (result?: unknown, error?: string, duration?: number) => Promise<void> }> {
     const startTime = Date.now();
     const action = this.extractAction(toolName);
@@ -263,6 +278,19 @@ export class ActivityLogger {
       action,
       parameters,
     };
+
+    // Add routing metrics if provided
+    if (options?.routing) {
+      const { toolsSent, toolsAvailable } = options.routing;
+      // Estimate tokens: ~50 tokens per tool on average
+      const tokensSaved = (toolsAvailable - toolsSent) * 50;
+      log.routing = { toolsSent, toolsAvailable, tokensSaved };
+    }
+
+    // Add security info if provided
+    if (options?.security) {
+      log.security = options.security;
+    }
 
     // Log to console immediately
     const paramsStr = this.formatParams(parameters);
