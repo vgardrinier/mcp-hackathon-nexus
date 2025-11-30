@@ -1,7 +1,7 @@
 import type { EndServerData } from './endServer/types.js';
 import { writeFileSync, existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
-import os from 'os';
+import { homedir } from 'os';
 
 // Known untrusted servers (external content, user-generated)
 const UNTRUSTED_SERVERS = new Set([
