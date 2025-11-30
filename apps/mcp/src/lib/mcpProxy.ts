@@ -445,7 +445,7 @@ ${candidateList}
             return {
               content: [{
                 type: "text",
-                text: `🚨 **Security Block**\n\n${edisonResult.reason || 'This operation was blocked by Nexus Security.'}\n\n💡 This prevents potential data exfiltration or prompt injection attacks.`
+                text: `🛡️ Security: ${edisonResult.reason || 'Operation blocked by Nexus Security'}`
               }],
               isError: true
             };
@@ -568,7 +568,7 @@ ${candidateList}
         return {
           content: [{
             type: "text",
-            text: `🚨 **Security Block**\n\n${edisonResult.reason || 'This operation was blocked by Nexus Security.'}\n\n💡 This prevents potential data exfiltration or prompt injection attacks.`
+            text: `🛡️ Security: ${edisonResult.reason || 'Operation blocked by Nexus Security'}`
           }],
           isError: true
         };

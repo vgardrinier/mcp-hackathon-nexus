@@ -16,6 +16,7 @@ export class EdisonClient {
   private baseUrl: string;
   private apiKey: string;
   private enabled: boolean;
+  private sessionId: string | null = null;
 
   constructor() {
     this.baseUrl = env.EDISON_URL;
@@ -23,12 +24,19 @@ export class EdisonClient {
     this.enabled = env.EDISON_ENABLED;
   }
 
+  /**
+   * Reset the session (e.g., when starting a new conversation)
+   */
+  resetSession(): void {
+    this.sessionId = null;
+  }
+
   isEnabled(): boolean {
     return this.enabled;
   }
 
   /**
-   * Forward an MCP tool call through Edison for security checking
+   * Check if Edison approves a tool call (using agent API)
    */
   async callTool(
     serverName: string,
@@ -40,61 +48,55 @@ export class EdisonClient {
     }
 
     try {
-      // Edison expects MCP protocol messages
-      const response = await fetch(`${this.baseUrl}/mcp/`, {
+      // Use Edison's agent API for simple approval check
+      const managementUrl = this.baseUrl.replace(':4000', ':4001');
+      const argsStr = JSON.stringify(request.params.arguments || {}).substring(0, 100);
+
+      // Build request body, including session_id if we have one to maintain trifecta tracking
+      const requestBody: Record<string, unknown> = {
+        name: `${serverName}_${toolName}`,
+        args_summary: argsStr,
+        agent_name: "nexus",
+        agent_type: "mcp_proxy"
+      };
+      
+      // Reuse session_id to track lethal trifecta across calls
+      if (this.sessionId) {
+        requestBody.session_id = this.sessionId;
+      }
+
+      const response = await fetch(`${managementUrl}/agent/begin`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json, text/event-stream",
           "Authorization": `Bearer ${this.apiKey}`
         },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: request.id || 1,
-          method: "tools/call",
-          params: {
-            name: `${serverName}/${toolName}`,
-            arguments: request.params.arguments || {}
-          }
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
-        if (response.status === 403) {
-          const text = await response.text();
-          return {
-            allowed: false,
-            blocked: true,
-            reason: text || "Edison blocked this operation for security reasons"
-          };
-        }
         throw new Error(`Edison returned ${response.status}: ${await response.text()}`);
       }
 
-      // Parse SSE response
-      const text = await response.text();
+      const result = await response.json();
 
-      // Simple SSE parsing - look for data: lines
-      const dataLines = text.split('\n').filter(line => line.startsWith('data: '));
-      if (dataLines.length === 0) {
-        return { allowed: true };
+      // Store session_id for subsequent calls (trifecta tracking)
+      if (result.session_id) {
+        this.sessionId = result.session_id;
       }
 
-      const lastData = dataLines[dataLines.length - 1].substring(6); // Remove "data: "
-      const result = JSON.parse(lastData);
-
-      // Check if Edison blocked it
-      if (result.error && result.error.message?.includes('blocked')) {
+      // Check approval status
+      if (!result.ok || result.approved === false) {
         return {
           allowed: false,
           blocked: true,
-          reason: result.error.message
+          reason: result.error || "Operation blocked by Edison security policy"
         };
       }
 
       return {
         allowed: true,
-        response: result.result
+        sessionBlocked: false
       };
     } catch (error) {
       console.error(`\x1B[91m[Edison] Error calling Edison: ${error instanceof Error ? error.message : String(error)}\x1B[0m`);
