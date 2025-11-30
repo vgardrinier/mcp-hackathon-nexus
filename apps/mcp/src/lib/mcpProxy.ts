@@ -12,9 +12,12 @@ import type { ToolRouter } from "./toolRouter.js";
 import { ActivityLogger } from "./activityLogger.js";
 import { sanitizeIntent, detectInjectionAttempt, checkRateLimit } from "./security.js";
 import { edisonClient } from "./edisonClient.js";
-import { syncNexusConfigToEdison } from "./edisonConfigGenerator.js";
+import { syncNexusConfigToEdison, classifyServer } from "./edisonConfigGenerator.js";
 import { resolve } from "node:path";
-import os from "node:os";
+import { homedir } from "node:os";
+
+// Track total tools for metrics
+let totalToolsAvailable = 0;
 
 const SERVER_INFO = {
   name: "Nexus L2 MCP",
@@ -403,9 +406,17 @@ ${candidateList}
           }
         }
 
+        // Get security classification for this server
+        const serverData = endServersData[endServerId];
+        const classification = serverData ? classifyServer(serverData) : null;
+        const securityInfo: { status: "safe" | "monitored" | "blocked"; trustLevel: "trusted" | "untrusted"; reason?: string } = {
+          status: "safe",
+          trustLevel: classification?.trustLevel === "UNTRUSTED" ? "untrusted" : "trusted",
+        };
+
         // Edison security check (if enabled)
         if (edisonClient.isEnabled()) {
-          console.log(`\x1B[96m[Edison] 🔒 Checking security for ${endServer.name}:${toolName}\x1B[0m`);
+          console.log(`\x1B[96m[Security] 🔒 Checking ${endServer.name}:${toolName}\x1B[0m`);
 
           const edisonResult = await edisonClient.callTool(
             endServer.name,
@@ -414,25 +425,51 @@ ${candidateList}
           );
 
           if (!edisonResult.allowed || edisonResult.blocked) {
-            console.log(`\x1B[91m[Edison] 🚨 BLOCKED: ${edisonResult.reason}\x1B[0m`);
+            console.log(`\x1B[91m[Security] 🚨 BLOCKED: ${edisonResult.reason}\x1B[0m`);
+            securityInfo.status = "blocked";
+            securityInfo.reason = edisonResult.reason || "Blocked by Nexus Security";
+
+            // Log the blocked attempt
+            const blockedLogHandle = await activityLogger.logToolCall(
+              endServer.name,
+              endServer.id,
+              toolName,
+              finalArgs,
+              {
+                routing: { toolsSent: 1, toolsAvailable: totalToolsAvailable },
+                security: securityInfo
+              }
+            );
+            await blockedLogHandle.complete(undefined, securityInfo.reason);
+
             return {
               content: [{
                 type: "text",
-                text: `🚨 **Security Block**\n\n${edisonResult.reason || 'This operation was blocked by Edison for security reasons.'}\n\n💡 This prevents potential data exfiltration or prompt injection attacks.`
+                text: `🚨 **Security Block**\n\n${edisonResult.reason || 'This operation was blocked by Nexus Security.'}\n\n💡 This prevents potential data exfiltration or prompt injection attacks.`
               }],
               isError: true
             };
           }
 
-          console.log(`\x1B[92m[Edison] ✅ Allowed: ${endServer.name}:${toolName}\x1B[0m`);
+          // Mark as monitored if from untrusted source
+          if (securityInfo.trustLevel === "untrusted") {
+            securityInfo.status = "monitored";
+            securityInfo.reason = "External content source - monitoring for injection";
+          }
+
+          console.log(`\x1B[92m[Security] ✅ Allowed: ${endServer.name}:${toolName}\x1B[0m`);
         }
 
-        // Log tool call start
+        // Log tool call start with routing and security metrics
         const logHandle = await activityLogger.logToolCall(
           endServer.name,
           endServer.id,
           toolName,
-          finalArgs
+          finalArgs,
+          {
+            routing: { toolsSent: 1, toolsAvailable: totalToolsAvailable },
+            security: securityInfo
+          }
         );
 
         try {
@@ -491,9 +528,17 @@ ${candidateList}
     const endServerId = namespaceToServerId[nexusId];
     const endServer = endServers[endServerId];
 
+    // Get security classification for this server
+    const serverData = endServersData[endServerId];
+    const classification = serverData ? classifyServer(serverData) : null;
+    const securityInfo: { status: "safe" | "monitored" | "blocked"; trustLevel: "trusted" | "untrusted"; reason?: string } = {
+      status: "safe",
+      trustLevel: classification?.trustLevel === "UNTRUSTED" ? "untrusted" : "trusted",
+    };
+
     // Edison security check (if enabled)
     if (edisonClient.isEnabled()) {
-      console.log(`\x1B[96m[Edison] 🔒 Checking security for ${endServer.name}:${toolName}\x1B[0m`);
+      console.log(`\x1B[96m[Security] 🔒 Checking ${endServer.name}:${toolName}\x1B[0m`);
 
       const edisonResult = await edisonClient.callTool(
         endServer.name,
@@ -502,17 +547,40 @@ ${candidateList}
       );
 
       if (!edisonResult.allowed || edisonResult.blocked) {
-        console.log(`\x1B[91m[Edison] 🚨 BLOCKED: ${edisonResult.reason}\x1B[0m`);
+        console.log(`\x1B[91m[Security] 🚨 BLOCKED: ${edisonResult.reason}\x1B[0m`);
+        securityInfo.status = "blocked";
+        securityInfo.reason = edisonResult.reason || "Blocked by Nexus Security";
+
+        // Log the blocked attempt
+        const args = (request.params.arguments as Record<string, unknown>) || {};
+        const blockedLogHandle = await activityLogger.logToolCall(
+          endServer.name,
+          endServer.id,
+          toolName,
+          args,
+          {
+            routing: { toolsSent: 1, toolsAvailable: totalToolsAvailable },
+            security: securityInfo
+          }
+        );
+        await blockedLogHandle.complete(undefined, securityInfo.reason);
+
         return {
           content: [{
             type: "text",
-            text: `🚨 **Security Block**\n\n${edisonResult.reason || 'This operation was blocked by Edison for security reasons.'}\n\n💡 This prevents potential data exfiltration or prompt injection attacks.`
+            text: `🚨 **Security Block**\n\n${edisonResult.reason || 'This operation was blocked by Nexus Security.'}\n\n💡 This prevents potential data exfiltration or prompt injection attacks.`
           }],
           isError: true
         };
       }
 
-      console.log(`\x1B[92m[Edison] ✅ Allowed: ${endServer.name}:${toolName}\x1B[0m`);
+      // Mark as monitored if from untrusted source
+      if (securityInfo.trustLevel === "untrusted") {
+        securityInfo.status = "monitored";
+        securityInfo.reason = "External content source - monitoring for injection";
+      }
+
+      console.log(`\x1B[92m[Security] ✅ Allowed: ${endServer.name}:${toolName}\x1B[0m`);
     }
 
     // Security: Check rate limit before execution
@@ -529,13 +597,17 @@ ${candidateList}
       };
     }
 
-    // Log tool call
+    // Log tool call with routing and security metrics
     const args = (request.params.arguments as Record<string, unknown>) || {};
     const logHandle = await activityLogger.logToolCall(
       endServer.name,
       endServer.id,
       toolName,
-      args
+      args,
+      {
+        routing: { toolsSent: 1, toolsAvailable: totalToolsAvailable },
+        security: securityInfo
+      }
     );
 
     try {
@@ -683,7 +755,7 @@ export async function initializeServer() {
   // Auto-generate Edison config from Nexus YAML configs
   if (edisonClient.isEnabled()) {
     console.log('\x1B[96m[Edison] Generating security configuration from Nexus MCP servers...\x1B[0m');
-    const edisonConfigDir = resolve(os.homedir(), '.config/nexus/edison');
+    const edisonConfigDir = resolve(homedir(), '.config/nexus/edison');
     try {
       await syncNexusConfigToEdison(userEndServers, edisonConfigDir);
     } catch (error) {
@@ -710,7 +782,8 @@ export async function initializeServer() {
 
 export function setToolRouter(router: ToolRouter) {
   toolRouter = router;
-  console.log("\x1B[90m[Router] Tool router initialized\x1B[0m");
+  totalToolsAvailable = router.getAllTools().length;
+  console.log(`\x1B[90m[Router] Tool router initialized with ${totalToolsAvailable} tools\x1B[0m`);
 }
 
 export function getEndServers(): Record<string, EndServer> {
